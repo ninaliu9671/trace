@@ -1,0 +1,184 @@
+export interface UserProfile {
+  id: string
+  job_title: string | null
+  industry: string | null
+  work_years: number | null
+  company_size: string | null
+  job_responsibilities: string | null
+  career_direction: string | null
+  skill_focus: string | null
+  onboarding_completed: boolean
+}
+
+export interface ReportModule {
+  id: string
+  name: string
+  description: string
+}
+
+export interface ReportNode {
+  id: string
+  user_id: string
+  name: string
+  trigger_desc: string | null
+  audience: string | null
+  modules: ReportModule[]
+  parent_id: string | null
+  sort_order: number
+  time_granularity: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | null
+  is_active: boolean
+  children?: ReportNode[]
+}
+
+export interface Dimension {
+  id: string
+  user_id: string
+  name: string
+  icon: string
+  level: 1 | 2 | 3
+  parent_id: string | null
+  sort_order: number
+  prompt_text: string | null
+  is_active: boolean
+  children?: Dimension[]
+}
+
+export interface DailyLog {
+  id: string
+  user_id: string
+  log_date: string
+  dimension_id: string
+  content: string
+  word_count: number | null
+  is_ai_generated: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface LogFieldState {
+  content: string
+  isAiFilled: boolean
+}
+
+export interface DataSources {
+  summaries_used?: string[]
+  logs_count?: number
+  completeness?: 'complete' | 'partial' | 'logs_only'
+  dimension_names?: string[]
+}
+
+export interface Summary {
+  id: string
+  user_id: string
+  created_at: string
+  updated_at: string
+  date_from: string            // 'YYYY-MM-DD'
+  date_to: string              // 'YYYY-MM-DD'
+  summary_type: 'weekly' | 'monthly' | 'quarterly' | 'annual' | 'adhoc'
+  title: string | null
+  content: string              // Markdown
+  report_node_id: string | null
+  data_sources: DataSources
+  is_draft: boolean
+  finalized_at: string | null
+  // 关联查询带入（非数据库字段）
+  dimension_names?: string[]
+}
+
+export interface CompletenessResult {
+  completeness: 'complete' | 'partial' | 'logs_only'
+  found_summaries: {
+    type: string
+    count: number
+    label: string
+  }[]
+  missing_types: {
+    type: string
+    label: string
+  }[]
+  logs_count: number
+}
+
+// 新建总结弹窗参数（Task 14 用）
+export interface NewSummaryParams {
+  dateFrom: string
+  dateTo: string
+  summaryType: Summary['summary_type']
+  dimensionIds: string[]       // 选中的维度 id 列表
+  reportNodeId: string | null  // 套用的汇报框架节点 id
+}
+
+export interface AiConversationState {
+  hasMessages: boolean
+  isEnded: boolean
+  hasPendingPreview: boolean
+}
+
+// v7: per-part profile preview from unified AI advisor
+export type ProfilePreviewTarget = 'profile' | 'report' | 'dimension'
+
+export interface ProfilePreviewProfileContent {
+  job_title?: string
+  industry?: string
+  work_years?: number
+  company_size?: string
+  job_responsibilities?: string
+  career_direction?: string
+  skill_focus?: string
+}
+
+export interface ProfilePreviewReportNode {
+  name: string
+  trigger_desc?: string | null
+  audience?: string | null
+  time_granularity?: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | null
+  parent_id?: string | null
+  modules?: ReportModule[]
+}
+
+export interface ProfilePreviewDimension {
+  name: string
+  icon?: string
+  level: 1 | 2 | 3
+  prompt_text?: string
+  children?: ProfilePreviewDimension[]
+}
+
+export interface ProfilePreview {
+  type: 'profile_preview'
+  target: ProfilePreviewTarget
+  content: ProfilePreviewProfileContent | ProfilePreviewReportNode[] | ProfilePreviewDimension[]
+}
+
+export interface AiMessage {
+  role: 'user' | 'assistant'
+  content: string
+  messageType?: 'text' | 'onboarding_result' | 'profile_preview'
+  onboardingData?: OnboardingResult
+  profilePreview?: ProfilePreview
+  confirmed?: boolean
+  discarded?: boolean
+}
+
+export interface OnboardingResult {
+  type: 'onboarding_result'
+  report_nodes: OnboardingReportNode[]
+  dimensions: OnboardingDimension[]
+}
+
+export interface OnboardingReportNode {
+  name: string
+  trigger_desc: string | null
+  audience: string | null
+  time_granularity: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | null
+  parent_id: string | null
+  modules: ReportModule[]
+}
+
+export interface OnboardingDimension {
+  name: string
+  icon: string
+  level: 1 | 2 | 3
+  prompt_text?: string
+  children?: OnboardingDimension[]
+}
