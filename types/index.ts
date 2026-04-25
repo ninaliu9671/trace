@@ -60,6 +60,17 @@ export interface LogFieldState {
   isAiFilled: boolean
 }
 
+export interface LogPreviewItem {
+  dimension_id: string
+  dimension_name: string
+  content: string
+}
+
+export interface LogPreview {
+  type: 'log_preview'
+  items: LogPreviewItem[]
+}
+
 export interface DataSources {
   summaries_used?: string[]
   logs_count?: number

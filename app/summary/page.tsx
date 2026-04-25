@@ -6,26 +6,9 @@ import SummaryList from '@/components/summary/SummaryList'
 import NewSummaryModal from '@/components/summary/NewSummaryModal'
 import DataCompletenessAlert from '@/components/summary/DataCompletenessAlert'
 import SummaryGeneratingOverlay from '@/components/summary/SummaryGeneratingOverlay'
+import MarkdownEditor from '@/components/summary/MarkdownEditor'
+import SummaryTopbar from '@/components/summary/SummaryTopbar'
 import { Summary, CompletenessResult, NewSummaryParams } from '@/types'
-
-const TYPE_LABELS: Record<string, string> = {
-  weekly: '周报', monthly: '月报', quarterly: '季报',
-  annual: '年报/述职', adhoc: '临时汇报',
-}
-
-function MetaTag({ label }: { label: string }) {
-  return (
-    <span style={{
-      fontSize: 11, color: '#6B6B6B',
-      background: '#F4F3F0',
-      border: '1px solid #E8E4DD',
-      borderRadius: 4,
-      padding: '1px 6px',
-    }}>
-      {label}
-    </span>
-  )
-}
 
 export default function SummaryPage() {
   const [summaries, setSummaries] = useState<Summary[]>([])
@@ -40,6 +23,12 @@ export default function SummaryPage() {
   const [checkingCompleteness, setCheckingCompleteness] = useState(false)
   const [generating, setGenerating] = useState(false)
 
+  // 编辑器状态
+  const [editorContent, setEditorContent] = useState('')
+  const [initialContent, setInitialContent] = useState('')
+  const [editorMode, setEditorMode] = useState<'edit' | 'preview'>('preview')
+  const [saving, setSaving] = useState(false)
+
   useEffect(() => {
     async function fetchSummaries() {
       setLoading(true)
@@ -53,15 +42,76 @@ export default function SummaryPage() {
 
   const selectedSummary = summaries.find(s => s.id === selectedId) ?? null
 
-  function handleNewClick() {
-    setShowNewModal(true)
+  // 选中总结时同步编辑器内容
+  useEffect(() => {
+    if (!selectedSummary) return
+    setEditorContent(selectedSummary.content)
+    setInitialContent(selectedSummary.content)
+    setEditorMode(selectedSummary.is_draft ? 'edit' : 'preview')
+  }, [selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleModeChange(mode: 'edit' | 'preview') {
+    if (mode === 'preview' && selectedSummary?.is_draft && editorContent !== initialContent) {
+      setSaving(true)
+      try {
+        await fetch(`/api/summary/${selectedSummary.id}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: editorContent }),
+        })
+        setInitialContent(editorContent)
+        setSummaries(prev =>
+          prev.map(s => s.id === selectedSummary.id ? { ...s, content: editorContent } : s)
+        )
+      } catch {
+        // 保存失败不阻止切换
+      } finally {
+        setSaving(false)
+      }
+    }
+    setEditorMode(mode)
+  }
+
+  function handleRevert() {
+    setEditorContent(initialContent)
+  }
+
+  async function handleFinalize() {
+    if (!selectedSummary) return
+    await fetch(`/api/summary/${selectedSummary.id}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: editorContent }),
+    })
+    await fetch(`/api/summary/${selectedSummary.id}/finalize`, { method: 'POST' })
+    setSummaries(prev =>
+      prev.map(s =>
+        s.id === selectedSummary.id
+          ? { ...s, is_draft: false, content: editorContent, finalized_at: new Date().toISOString() }
+          : s
+      )
+    )
+    setInitialContent(editorContent)
+    setEditorMode('preview')
+  }
+
+  async function handleReEdit() {
+    if (!selectedSummary) return
+    await fetch(`/api/summary/${selectedSummary.id}/re-edit`, { method: 'POST' })
+    setSummaries(prev =>
+      prev.map(s =>
+        s.id === selectedSummary.id
+          ? { ...s, is_draft: true, finalized_at: null }
+          : s
+      )
+    )
+    setEditorMode('edit')
   }
 
   async function handleModalSubmit(params: NewSummaryParams) {
     setShowNewModal(false)
     setCheckingCompleteness(true)
     setPendingParams(params)
-
     try {
       const res = await fetch('/api/summary/check-completeness', {
         method: 'POST',
@@ -74,7 +124,6 @@ export default function SummaryPage() {
       })
       const data: CompletenessResult = await res.json()
       setCheckingCompleteness(false)
-
       if (data.completeness === 'complete') {
         handleStartGenerate(params, data)
       } else {
@@ -82,7 +131,7 @@ export default function SummaryPage() {
       }
     } catch {
       setCheckingCompleteness(false)
-      if (params) handleStartGenerate(params, null)
+      handleStartGenerate(params, null)
     }
   }
 
@@ -90,7 +139,6 @@ export default function SummaryPage() {
     setCompletenessResult(null)
     setPendingParams(null)
     setGenerating(true)
-
     try {
       const res = await fetch('/api/summary/generate', {
         method: 'POST',
@@ -105,12 +153,7 @@ export default function SummaryPage() {
         }),
       })
       const data = await res.json()
-
-      if (data.error) {
-        alert(data.error)
-        return
-      }
-
+      if (data.error) { alert(data.error); return }
       const newSummary: Summary = data.summary
       setSummaries(prev => [newSummary, ...prev])
       setSelectedId(newSummary.id)
@@ -123,173 +166,102 @@ export default function SummaryPage() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#F8F7F4', overflow: 'hidden' }}>
-      {/* 左侧导航栏 */}
       <Sidebar />
 
-      {/* 主内容区 */}
       <div style={{
-        flex: 1,
-        display: 'flex',
-        overflow: 'hidden',
+        flex: 1, display: 'flex', overflow: 'hidden',
         marginRight: aiOpen ? 280 : 0,
         transition: 'margin-right 0.2s ease',
       }}>
-        {/* 左侧总结列表（220px） */}
+        {/* 左侧总结列表 */}
         <div style={{
-          width: 220,
-          flexShrink: 0,
+          width: 220, flexShrink: 0,
           borderRight: '1px solid #F0EDE8',
           background: '#FAFAF8',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '14px 14px 10px',
-            borderBottom: '1px solid #F0EDE8',
-            flexShrink: 0,
+            borderBottom: '1px solid #F0EDE8', flexShrink: 0,
           }}>
             <span style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A' }}>工作总结</span>
             <button
-              onClick={handleNewClick}
+              onClick={() => setShowNewModal(true)}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 3,
-                padding: '4px 8px',
-                background: '#1D9E75',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: 6,
-                fontSize: 12,
-                fontWeight: 500,
-                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 3,
+                padding: '4px 8px', background: '#1D9E75', color: '#FFFFFF',
+                border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer',
               }}
             >
               + 新建
             </button>
           </div>
-
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {loading ? (
-              <div style={{ padding: '16px 14px', fontSize: 12, color: '#B0ADA6' }}>
-                加载中...
-              </div>
+              <div style={{ padding: '16px 14px', fontSize: 12, color: '#B0ADA6' }}>加载中...</div>
             ) : (
-              <SummaryList
-                summaries={summaries}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
+              <SummaryList summaries={summaries} selectedId={selectedId} onSelect={setSelectedId} />
             )}
           </div>
         </div>
 
         {/* 右侧内容区 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {/* 顶部栏 */}
-          <div style={{
-            height: 56,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 24px',
-            borderBottom: '1px solid #F0EDE8',
-            flexShrink: 0,
-            background: '#F8F7F4',
-          }}>
-            {selectedSummary ? (
-              <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <span style={{ fontSize: 15, fontWeight: 500, color: '#1A1A1A' }}>
-                    {selectedSummary.title ?? formatSummaryTitle(selectedSummary)}
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <MetaTag label={TYPE_LABELS[selectedSummary.summary_type] ?? '总结'} />
-                    <MetaTag label={`${selectedSummary.date_from} 至 ${selectedSummary.date_to}`} />
-                    {selectedSummary.is_draft && (
-                      <span style={{
-                        fontSize: 10, padding: '1px 5px', borderRadius: 3,
-                        background: '#FFFBEB', color: '#92400E',
-                        border: '1px solid #FDE68A',
-                      }}>草稿</span>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setAiOpen(prev => !prev)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 12px',
-                    background: aiOpen ? '#1D9E75' : '#E8F7F2',
-                    color: aiOpen ? '#FFFFFF' : '#0F6E56',
-                    border: `1px solid ${aiOpen ? '#1D9E75' : '#9FE1CB'}`,
-                    borderRadius: 7,
-                    fontSize: 12,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  ✦ AI 助手
-                </button>
-              </>
-            ) : (
-              <>
-                <span style={{ fontSize: 15, fontWeight: 500, color: '#1A1A1A' }}>汇报总结</span>
-                <button
-                  onClick={() => setAiOpen(prev => !prev)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 12px',
-                    background: aiOpen ? '#1D9E75' : '#E8F7F2',
-                    color: aiOpen ? '#FFFFFF' : '#0F6E56',
-                    border: `1px solid ${aiOpen ? '#1D9E75' : '#9FE1CB'}`,
-                    borderRadius: 7,
-                    fontSize: 12,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  ✦ AI 助手
-                </button>
-              </>
-            )}
+        {selectedSummary ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <SummaryTopbar
+              summary={selectedSummary}
+              content={editorContent}
+              initialContent={initialContent}
+              mode={editorMode}
+              saving={saving}
+              onModeChange={handleModeChange}
+              onRevert={handleRevert}
+              onFinalize={handleFinalize}
+              onReEdit={handleReEdit}
+              aiOpen={aiOpen}
+              onAiToggle={() => setAiOpen(prev => !prev)}
+            />
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              <MarkdownEditor
+                content={editorContent}
+                onChange={setEditorContent}
+                mode={editorMode}
+                locked={!selectedSummary.is_draft}
+                onSwitchToEdit={() => setEditorMode('edit')}
+              />
+            </div>
           </div>
-
-          {/* 内容主区域 */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {selectedSummary ? (
-              <div style={{ padding: '24px', flex: 1 }}>
-                {/* Task 16 替换为 MarkdownEditor */}
-                <pre style={{
-                  fontSize: 13,
-                  color: '#1A1A1A',
-                  lineHeight: 1.8,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  margin: 0,
-                }}>
-                  {selectedSummary.content}
-                </pre>
-              </div>
-            ) : (
+        ) : (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{
+              height: 56, display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', padding: '0 24px',
+              borderBottom: '1px solid #F0EDE8', flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 15, fontWeight: 500, color: '#1A1A1A' }}>汇报总结</span>
+              <button
+                onClick={() => setAiOpen(prev => !prev)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 12px',
+                  background: aiOpen ? '#1D9E75' : '#E8F7F2',
+                  color: aiOpen ? '#FFFFFF' : '#0F6E56',
+                  border: `1px solid ${aiOpen ? '#1D9E75' : '#9FE1CB'}`,
+                  borderRadius: 7, fontSize: 12, fontWeight: 500,
+                  cursor: 'pointer', transition: 'all 0.15s ease',
+                }}
+              >
+                ✦ AI 助手
+              </button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
               <EmptyState />
-            )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* AI 面板 */}
       <AiSidePanel
         isOpen={aiOpen}
         onClose={() => setAiOpen(false)}
@@ -301,15 +273,10 @@ export default function SummaryPage() {
         apiRoute="/api/summary/ai-chat"
       />
 
-      {/* 新建总结弹窗 */}
       {showNewModal && (
-        <NewSummaryModal
-          onClose={() => setShowNewModal(false)}
-          onSubmit={handleModalSubmit}
-        />
+        <NewSummaryModal onClose={() => setShowNewModal(false)} onSubmit={handleModalSubmit} />
       )}
 
-      {/* 完整度检查中的简单 loading 提示 */}
       {checkingCompleteness && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 45,
@@ -326,19 +293,14 @@ export default function SummaryPage() {
         </div>
       )}
 
-      {/* 完整度提示弹窗 */}
       {completenessResult && pendingParams && (
         <DataCompletenessAlert
           result={completenessResult}
           onProceed={() => handleStartGenerate(pendingParams, completenessResult)}
-          onCancel={() => {
-            setCompletenessResult(null)
-            setPendingParams(null)
-          }}
+          onCancel={() => { setCompletenessResult(null); setPendingParams(null) }}
         />
       )}
 
-      {/* AI 生成遮罩 */}
       {generating && <SummaryGeneratingOverlay />}
     </div>
   )
@@ -347,14 +309,9 @@ export default function SummaryPage() {
 function EmptyState() {
   return (
     <div style={{
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 12,
-      height: '100%',
-      color: '#B0ADA6',
+      flex: 1, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      gap: 12, height: '100%', color: '#B0ADA6',
     }}>
       <span style={{ fontSize: 32 }}>◫</span>
       <div style={{ textAlign: 'center' }}>
@@ -367,11 +324,8 @@ function EmptyState() {
 
 function formatSummaryTitle(summary: Summary): string {
   const typeLabels: Record<Summary['summary_type'], string> = {
-    weekly:    '周报',
-    monthly:   '月报',
-    quarterly: '季报',
-    annual:    '年报/述职',
-    adhoc:     '临时汇报',
+    weekly: '周报', monthly: '月报', quarterly: '季报',
+    annual: '年报/述职', adhoc: '临时汇报',
   }
   const label = typeLabels[summary.summary_type] ?? '总结'
   const from = summary.date_from.slice(0, 7).replace('-', '年') + '月'

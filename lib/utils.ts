@@ -38,3 +38,11 @@ export function getThisQuarterRange(): { from: string; to: string } {
   const last = new Date(y, lastMonth + 1, 0)
   return { from: toDateString(first), to: toDateString(last) }
 }
+
+// 格式化保存时间（用于 SavedBanner）
+export function formatSavedAt(isoString: string): string {
+  const d = new Date(isoString)
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
