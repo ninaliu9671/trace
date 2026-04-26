@@ -112,9 +112,10 @@ export default function LogPreviewCard({ data, onAdopt }: LogPreviewCardProps) {
             borderTop: '1px solid #E8F7F2',
             fontSize: 12,
             color: '#9FE1CB',
+            lineHeight: 1.6,
           }}
         >
-          ✓ 已填入记录
+          ✓ 已填入记录 · 可直接编辑字段，或继续告诉 AI 调整（AI 会整体替换）
         </div>
       )}
     </div>

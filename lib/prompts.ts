@@ -151,6 +151,8 @@ current_focus: {current_focus}
 【用户的维度结构】
 {dimensions_tree}
 
+格式说明：每行格式为 [ID:uuid] 维度名称，其中 uuid 是该维度的唯一标识符。
+
 【今天已有的记录内容】
 {existing_logs}
 
@@ -165,14 +167,16 @@ current_focus: {current_focus}
   "type": "log_preview",
   "items": [
     {
-      "dimension_id": "xxx",
-      "dimension_name": "需求分析 · 今日进展",
+      "dimension_id": "从维度结构中提取的完整 UUID（方括号内的 ID）",
+      "dimension_name": "维度的显示名称（如：需求分析 · 今日进展）",
       "content": "整理后的内容"
     }
   ]
 }
 
-【注意】
+【重要】
+- dimension_id 必须是维度结构中 [ID:xxx] 方括号内的完整 UUID，不能使用维度名称
+- dimension_name 用于显示，可以包含层级路径
 - 只整理，不编造，内容必须来自用户说的
 - 用户说了多件事，可以拆成多个 items 归不同维度
 - 用汇报语气，不是日记语气

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient, createSessionClient } from '@/lib/supabase/server'
+import { createSessionClient } from '@/lib/supabase/server'
 
 interface LogEntry {
   dimension_id: string
@@ -9,10 +9,10 @@ interface LogEntry {
 
 export async function POST(req: NextRequest) {
   try {
-    const sessionClient = await createSessionClient()
+    const supabase = await createSessionClient()
     const {
       data: { user },
-    } = await sessionClient.auth.getUser()
+    } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 })
 
     const { date, entries }: { date: string; entries: LogEntry[] } = await req.json()
@@ -21,15 +21,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '日期格式错误' }, { status: 400 })
     }
 
-    const serverClient = createServerClient()
-
-    const { error: deleteError } = await serverClient
+    // 使用 session client 删除旧记录（RLS 会自动限制为当前用户）
+    const { error: deleteError } = await supabase
       .from('daily_logs')
       .delete()
       .eq('user_id', user.id)
       .eq('log_date', date)
 
-    if (deleteError) throw deleteError
+    if (deleteError) {
+      console.error('Delete error:', deleteError)
+      throw new Error(`删除旧记录失败: ${deleteError.message}`)
+    }
 
     const nonEmpty = entries.filter(e => e.content.trim())
     if (nonEmpty.length > 0) {
@@ -42,13 +44,19 @@ export async function POST(req: NextRequest) {
         is_ai_generated: e.is_ai_generated,
       }))
 
-      const { error: insertError } = await serverClient.from('daily_logs').insert(rows)
+      // 使用 session client 插入新记录（RLS 会自动验证权限）
+      const { error: insertError } = await supabase.from('daily_logs').insert(rows)
 
-      if (insertError) throw insertError
+      if (insertError) {
+        console.error('Insert error:', insertError)
+        throw new Error(`插入新记录失败: ${insertError.message}`)
+      }
     }
 
     return NextResponse.json({ ok: true, savedAt: new Date().toISOString() })
-  } catch {
-    return NextResponse.json({ error: '保存失败，请稍后重试' }, { status: 500 })
+  } catch (err) {
+    console.error('Save log error:', err)
+    const errorMessage = err instanceof Error ? err.message : '保存失败，请稍后重试'
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

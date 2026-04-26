@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient, createSessionClient } from '@/lib/supabase/server'
+import { createSessionClient } from '@/lib/supabase/server'
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ date: string }> }
 ) {
   try {
-    const sessionClient = await createSessionClient()
+    const supabase = await createSessionClient()
     const {
       data: { user },
-    } = await sessionClient.auth.getUser()
+    } = await supabase.auth.getUser()
 
     if (!user) {
       return NextResponse.json({ error: '未登录' }, { status: 401 })
@@ -20,8 +20,7 @@ export async function GET(
       return NextResponse.json({ error: '日期格式错误' }, { status: 400 })
     }
 
-    const serverClient = createServerClient()
-    const { data: logs, error } = await serverClient
+    const { data: logs, error } = await supabase
       .from('daily_logs')
       .select('*')
       .eq('user_id', user.id)

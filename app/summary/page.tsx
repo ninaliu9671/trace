@@ -108,6 +108,18 @@ export default function SummaryPage() {
     setEditorMode('edit')
   }
 
+  function handleReplaceSuggestionAdopt(original: string, replacement: string): boolean {
+    const idx = editorContent.indexOf(original)
+    if (idx === -1) return false
+    setEditorContent(prev => prev.slice(0, idx) + replacement + prev.slice(idx + original.length))
+    if (editorMode === 'preview') setEditorMode('edit')
+    return true
+  }
+
+  const aiExtraParams = selectedSummary
+    ? { currentContent: editorContent }
+    : { currentContent: '' }
+
   async function handleModalSubmit(params: NewSummaryParams) {
     setShowNewModal(false)
     setCheckingCompleteness(true)
@@ -263,14 +275,17 @@ export default function SummaryPage() {
       </div>
 
       <AiSidePanel
+        key={selectedId ?? 'no-selection'}
         isOpen={aiOpen}
         onClose={() => setAiOpen(false)}
         contextLabel={
           selectedSummary
-            ? `已读取：${selectedSummary.title ?? formatSummaryTitle(selectedSummary)}`
+            ? `已读取：${selectedSummary.title ?? formatSummaryTitle(selectedSummary)}（编辑器当前内容）`
             : '请先选择一份总结'
         }
         apiRoute="/api/summary/ai-chat"
+        extraBodyParams={aiExtraParams}
+        onReplaceSuggestionAdopt={handleReplaceSuggestionAdopt}
       />
 
       {showNewModal && (

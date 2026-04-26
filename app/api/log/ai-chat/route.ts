@@ -26,7 +26,14 @@ export async function POST(req: NextRequest) {
 
     let logPreview: unknown = null
     try {
-      const parsed = JSON.parse(content)
+      // Strip markdown code blocks if present
+      let jsonStr = content.trim()
+      const codeBlockMatch = jsonStr.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/m)
+      if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1].trim()
+      }
+
+      const parsed = JSON.parse(jsonStr)
       if (parsed?.type === 'log_preview') logPreview = parsed
     } catch {
       // 普通对话文字，忽略

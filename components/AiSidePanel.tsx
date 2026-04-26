@@ -11,6 +11,9 @@ import {
   Dimension,
 } from '@/types'
 import ProfilePreviewCard from '@/components/profile/ProfilePreviewCard'
+import AiReplaceCard from '@/components/summary/AiReplaceCard'
+import LogPreviewCard from '@/components/log/LogPreviewCard'
+import { LogPreviewItem } from '@/types'
 
 interface AiSidePanelProps {
   isOpen: boolean
@@ -34,6 +37,11 @@ interface AiSidePanelProps {
   autoSendMessage?: string | null
   onAutoSendConsumed?: () => void
   onConversationStateChange?: (state: AiConversationState) => void
+  // summary 页面专用
+  extraBodyParams?: Record<string, unknown>
+  onReplaceSuggestionAdopt?: (original: string, replacement: string) => boolean
+  // log 页面专用
+  onLogPreviewAdopt?: (items: LogPreviewItem[]) => void
 }
 
 export default function AiSidePanel({
@@ -54,6 +62,9 @@ export default function AiSidePanel({
   autoSendMessage,
   onAutoSendConsumed,
   onConversationStateChange,
+  extraBodyParams,
+  onReplaceSuggestionAdopt,
+  onLogPreviewAdopt,
 }: AiSidePanelProps) {
   const [messages, setMessages] = useState<AiMessage[]>([])
   const [input, setInput] = useState('')
@@ -65,7 +76,8 @@ export default function AiSidePanel({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const hasPendingPreview = messages.some(
-    m => m.messageType === 'profile_preview' && !m.confirmed && !m.discarded
+    m => (m.messageType === 'profile_preview' && !m.confirmed && !m.discarded) ||
+         (m.messageType === 'replace_suggestion' && !m.confirmed && !m.discarded)
   )
   const inputLocked = sending || ended || hasPendingPreview
 
@@ -134,7 +146,14 @@ export default function AiSidePanel({
     })
       .then(r => r.json())
       .then(data => {
-        if (data.profilePreview) {
+        if (data.logPreview) {
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: data.content,
+            messageType: 'log_preview' as const,
+            logPreviewData: data.logPreview,
+          }])
+        } else if (data.profilePreview) {
           setMessages(prev => [...prev, {
             role: 'assistant',
             content: data.content,
@@ -231,6 +250,7 @@ export default function AiSidePanel({
           }
         : {
             messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+            ...(extraBodyParams ?? {}),
           }
 
       const res = await fetch(apiRoute, {
@@ -240,7 +260,21 @@ export default function AiSidePanel({
       })
       const data = await res.json()
 
-      if (data.profilePreview) {
+      if (data.replaceSuggestion) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: data.content,
+          messageType: 'replace_suggestion' as const,
+          replaceSuggestionData: data.replaceSuggestion,
+        }])
+      } else if (data.logPreview) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: data.content,
+          messageType: 'log_preview' as const,
+          logPreviewData: data.logPreview,
+        }])
+      } else if (data.profilePreview) {
         setMessages(prev => [
           ...prev,
           {
@@ -391,7 +425,13 @@ export default function AiSidePanel({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {messages.length > 0 && (
             <button
-              onClick={() => setEnded(true)}
+              onClick={() => {
+                const hasPendingReplace = messages.some(
+                  m => m.messageType === 'replace_suggestion' && !m.confirmed && !m.discarded
+                )
+                if (hasPendingReplace && !window.confirm('有未采纳的替换建议，结束后将丢失。确认结束？')) return
+                setEnded(true)
+              }}
               disabled={ended}
               style={{
                 fontSize: 12,
@@ -451,6 +491,32 @@ export default function AiSidePanel({
                 discarded={msg.discarded}
                 onAdopt={(p) => handleAdopt(p, i)}
                 onDiscard={() => handleDiscard(i)}
+              />
+            )
+          }
+          if (msg.messageType === 'replace_suggestion' && msg.replaceSuggestionData) {
+            return (
+              <AiReplaceCard
+                key={i}
+                data={msg.replaceSuggestionData}
+                onAdopt={(original, replacement) => {
+                  return onReplaceSuggestionAdopt?.(original, replacement) ?? true
+                }}
+                onCopy={() => {}}
+                onDismiss={() => {
+                  setMessages(prev => prev.map((m, idx) =>
+                    idx === i ? { ...m, confirmed: true, discarded: true } : m
+                  ))
+                }}
+              />
+            )
+          }
+          if (msg.messageType === 'log_preview' && msg.logPreviewData) {
+            return (
+              <LogPreviewCard
+                key={i}
+                data={msg.logPreviewData}
+                onAdopt={() => onLogPreviewAdopt?.(msg.logPreviewData!.items)}
               />
             )
           }

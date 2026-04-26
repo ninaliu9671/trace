@@ -161,12 +161,21 @@ export interface ProfilePreview {
   content: ProfilePreviewProfileContent | ProfilePreviewReportNode[] | ProfilePreviewDimension[]
 }
 
+export interface ReplaceSuggestion {
+  type: 'replace_suggestion'
+  target_section: string
+  original: string
+  replacement: string
+}
+
 export interface AiMessage {
   role: 'user' | 'assistant'
   content: string
-  messageType?: 'text' | 'onboarding_result' | 'profile_preview'
+  messageType?: 'text' | 'onboarding_result' | 'profile_preview' | 'log_preview' | 'replace_suggestion'
   onboardingData?: OnboardingResult
   profilePreview?: ProfilePreview
+  logPreviewData?: LogPreview
+  replaceSuggestionData?: ReplaceSuggestion
   confirmed?: boolean
   discarded?: boolean
 }

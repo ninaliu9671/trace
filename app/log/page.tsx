@@ -6,9 +6,11 @@ import AiSidePanel from '@/components/AiSidePanel'
 import DateNav from '@/components/log/DateNav'
 import DimensionDirectory from '@/components/log/DimensionDirectory'
 import LogContent from '@/components/log/LogContent'
+import SaveButton from '@/components/log/SaveButton'
+import SavedBanner from '@/components/log/SavedBanner'
 import { createClient } from '@/lib/supabase/client'
 import { toDateString } from '@/lib/utils'
-import { DailyLog, Dimension, LogFieldState } from '@/types'
+import { DailyLog, Dimension, LogFieldState, LogPreviewItem } from '@/types'
 
 export default function LogPage() {
   const [currentDate, setCurrentDate] = useState<Date>(new Date())
@@ -108,6 +110,46 @@ export default function LogPage() {
     }))
   }
 
+  async function handleSave() {
+    try {
+      const entries = Object.entries(fieldStates).map(([dimension_id, state]) => ({
+        dimension_id,
+        content: state.content,
+        is_ai_generated: state.isAiFilled,
+      }))
+      const res = await fetch('/api/log/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: toDateString(currentDate), entries }),
+      })
+      const data = await res.json()
+      if (data.error) {
+        alert(`保存失败：${data.error}`)
+        throw new Error(data.error)
+      }
+      setLocked(true)
+      setSavedAt(data.savedAt)
+    } catch (err) {
+      console.error('Save failed:', err)
+      throw err
+    }
+  }
+
+  function handleLogPreviewAdopt(items: LogPreviewItem[]) {
+    console.log('Adopting log preview items:', items)
+    console.log('Current dimensions:', dimensions.map(d => ({ id: d.id, name: d.name })))
+    setLocked(false)
+    setFieldStates(prev => {
+      const next = { ...prev }
+      for (const item of items) {
+        console.log(`Setting field for dimension_id: ${item.dimension_id}`)
+        next[item.dimension_id] = { content: item.content, isAiFilled: true }
+      }
+      console.log('New fieldStates:', next)
+      return next
+    })
+  }
+
   const existingLogsText = useMemo(() => {
     const parts = Object.entries(fieldStates)
       .filter(([, state]) => state.content.trim())
@@ -123,7 +165,7 @@ export default function LogPage() {
     if (dimensions.length === 0) return '暂无维度数据'
     return [...dimensions]
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map(d => `${'  '.repeat(d.level - 1)}${d.name}${d.prompt_text ? `（${d.prompt_text}）` : ''}`)
+      .map(d => `${'  '.repeat(d.level - 1)}[ID:${d.id}] ${d.name}${d.prompt_text ? `（${d.prompt_text}）` : ''}`)
       .join('\n')
   }, [dimensions])
 
@@ -180,6 +222,10 @@ export default function LogPage() {
           </button>
         </div>
 
+        {locked && savedAt && (
+          <SavedBanner savedAt={savedAt} onEdit={() => setLocked(false)} />
+        )}
+
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <div
             style={{
@@ -209,32 +255,24 @@ export default function LogPage() {
             {dataLoading ? (
               <div style={{ padding: 24, fontSize: 13, color: '#B0ADA6' }}>日志内容加载中...</div>
             ) : (
-              <LogContent
-                dimensions={dimensions}
-                fieldStates={fieldStates}
-                locked={locked}
-                activeLeafId={activeLeafId}
-                onFieldChange={handleFieldChange}
-              />
+              <>
+                <LogContent
+                  dimensions={dimensions}
+                  fieldStates={fieldStates}
+                  locked={locked}
+                  activeLeafId={activeLeafId}
+                  onFieldChange={handleFieldChange}
+                />
+                {!locked && (
+                  <SaveButton
+                    onSave={handleSave}
+                    disabled={Object.values(fieldStates).every(s => !s.content.trim())}
+                  />
+                )}
+              </>
             )}
           </div>
         </div>
-
-        {savedAt && (
-          <div
-            style={{
-              padding: '8px 24px',
-              fontSize: 12,
-              color: '#6B6B6B',
-              background: '#FAFAF8',
-              borderTopWidth: '1px',
-              borderTopStyle: 'solid',
-              borderTopColor: '#F0EDE8',
-            }}
-          >
-            已加载当日已保存记录（保存时间：{new Date(savedAt).toLocaleString('zh-CN')}）
-          </div>
-        )}
       </div>
 
       <AiSidePanel
@@ -244,6 +282,8 @@ export default function LogPage() {
         apiRoute="/api/log/ai-chat"
         logDimensionsTree={dimensionsTreeText}
         logExistingLogs={existingLogsText}
+        initialMessage="你好！请告诉我今天做了什么，我来帮你整理到对应的记录维度里。"
+        onLogPreviewAdopt={handleLogPreviewAdopt}
       />
     </div>
   )
