@@ -32,28 +32,20 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 5,
 }
 
-const granularityOptions = [
-  { value: '', label: '— 不设定 —' },
-  { value: 'daily', label: '每日' },
-  { value: 'weekly', label: '每周' },
-  { value: 'monthly', label: '每月' },
-  { value: 'quarterly', label: '每季度' },
-  { value: 'annual', label: '每年' },
-]
+const STYLE_PLACEHOLDER = `描述你在这类汇报中的风格偏好，例如：
+• 汇报重点：以结果和数据驱动，突出 ROI
+• 对象关注点：老板更在意风险和资源，不关心技术细节
+• 语气风格：简洁直接，结论前置，避免废话`
 
 export default function ReportNodeEditor({ node, allNodes, onSaved, onClose }: ReportNodeEditorProps) {
   const [form, setForm] = useState({
     name: node?.name ?? '',
-    trigger_desc: node?.trigger_desc ?? '',
     audience: node?.audience ?? '',
-    time_granularity: node?.time_granularity ?? '',
-    parent_id: node?.parent_id ?? '',
+    style: node?.style ?? '',
   })
   const [modules, setModules] = useState<ReportModule[]>(node?.modules ?? [])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  const parentOptions = allNodes.filter(n => n.id !== node?.id)
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -86,10 +78,8 @@ export default function ReportNodeEditor({ node, allNodes, onSaved, onClose }: R
     const payload = {
       ...(node?.id ? { id: node.id } : {}),
       name: form.name.trim(),
-      trigger_desc: form.trigger_desc || null,
       audience: form.audience || null,
-      time_granularity: form.time_granularity || null,
-      parent_id: form.parent_id || null,
+      style: form.style || null,
       modules: modules.filter(m => m.name.trim()),
       sort_order: node?.sort_order ?? 99,
     }
@@ -126,7 +116,7 @@ export default function ReportNodeEditor({ node, allNodes, onSaved, onClose }: R
     >
       <div
         style={{
-          width: 480,
+          width: 520,
           background: '#FFFFFF',
           borderRadius: 12,
           overflow: 'hidden',
@@ -156,6 +146,7 @@ export default function ReportNodeEditor({ node, allNodes, onSaved, onClose }: R
 
         {/* 内容区 */}
         <div style={{ padding: '18px 22px', maxHeight: '70vh', overflowY: 'auto' }}>
+
           {/* 汇报名称 */}
           <div style={{ marginBottom: 14 }}>
             <label style={labelStyle}>汇报名称 *</label>
@@ -167,17 +158,6 @@ export default function ReportNodeEditor({ node, allNodes, onSaved, onClose }: R
             />
           </div>
 
-          {/* 触发方式 */}
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>触发方式</label>
-            <input
-              style={inputStyle}
-              value={form.trigger_desc}
-              onChange={e => setForm(f => ({ ...f, trigger_desc: e.target.value }))}
-              placeholder="如「每周五」"
-            />
-          </div>
-
           {/* 汇报对象 */}
           <div style={{ marginBottom: 14 }}>
             <label style={labelStyle}>汇报对象</label>
@@ -185,70 +165,98 @@ export default function ReportNodeEditor({ node, allNodes, onSaved, onClose }: R
               style={inputStyle}
               value={form.audience}
               onChange={e => setForm(f => ({ ...f, audience: e.target.value }))}
-              placeholder="如「直属总监」"
+              placeholder="如「直属总监」「财务总监」"
             />
           </div>
 
-          {/* 汇报周期 */}
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>汇报周期</label>
-            <select
-              style={{ ...inputStyle, cursor: 'pointer' }}
-              value={form.time_granularity}
-              onChange={e => setForm(f => ({ ...f, time_granularity: e.target.value }))}
-            >
-              {granularityOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 依赖上层节点 */}
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>依赖上层节点</label>
-            <select
-              style={{ ...inputStyle, cursor: 'pointer' }}
-              value={form.parent_id}
-              onChange={e => setForm(f => ({ ...f, parent_id: e.target.value }))}
-            >
-              <option value="">— 顶层节点 —</option>
-              {parentOptions.map(n => (
-                <option key={n.id} value={n.id}>{n.name}</option>
-              ))}
-            </select>
+          {/* 汇报风格 */}
+          <div style={{ marginBottom: 18 }}>
+            <label style={labelStyle}>汇报风格</label>
+            <textarea
+              style={{
+                ...inputStyle,
+                minHeight: 90,
+                resize: 'vertical',
+                lineHeight: 1.6,
+              }}
+              value={form.style}
+              onChange={e => setForm(f => ({ ...f, style: e.target.value }))}
+              placeholder={STYLE_PLACEHOLDER}
+            />
+            <div style={{ marginTop: 5, fontSize: 11, color: '#B0ADA6', lineHeight: 1.5 }}>
+              可以描述：汇报重点、对象最在意什么、偏好的语气风格（口语化/正式/数据驱动等）
+            </div>
           </div>
 
           {/* 包含模块 */}
           <div style={{ marginBottom: 6 }}>
             <label style={labelStyle}>包含模块</label>
-            {modules.map(m => (
-              <div key={m.id} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                <input
-                  value={m.name}
-                  onChange={e => updateModule(m.id, 'name', e.target.value)}
-                  placeholder="模块名称"
-                  style={{ ...inputStyle, width: 130, flexShrink: 0 }}
-                />
-                <input
+            {modules.map((m) => (
+              <div
+                key={m.id}
+                style={{
+                  border: '1px solid #E8E4DD',
+                  borderRadius: 8,
+                  padding: '10px 12px',
+                  marginBottom: 8,
+                  background: '#F8F7F4',
+                  position: 'relative',
+                }}
+              >
+                {/* 三级标题行 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, color: '#B0ADA6', fontWeight: 600, flexShrink: 0 }}>
+                    ###
+                  </span>
+                  <input
+                    value={m.name}
+                    onChange={e => updateModule(m.id, 'name', e.target.value)}
+                    placeholder="模块标题，如「核心项目进展」"
+                    style={{
+                      ...inputStyle,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      background: 'transparent',
+                      border: 'none',
+                      borderBottom: '1px solid #E8E4DD',
+                      borderRadius: 0,
+                      padding: '2px 0',
+                      flex: 1,
+                    }}
+                  />
+                  <button
+                    onClick={() => removeModule(m.id)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#B0ADA6',
+                      fontSize: 16,
+                      cursor: 'pointer',
+                      padding: '0 2px',
+                      flexShrink: 0,
+                      lineHeight: 1,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                {/* 描述行 */}
+                <textarea
                   value={m.description}
                   onChange={e => updateModule(m.id, 'description', e.target.value)}
-                  placeholder="简要描述"
-                  style={{ ...inputStyle, flex: 1 }}
-                />
-                <button
-                  onClick={() => removeModule(m.id)}
+                  placeholder="描述这个模块应包含哪些内容，如「本周推进的主要项目，含里程碑和阻塞点」"
                   style={{
+                    ...inputStyle,
                     background: 'transparent',
                     border: 'none',
-                    color: '#B0ADA6',
-                    fontSize: 16,
-                    cursor: 'pointer',
-                    padding: '0 4px',
-                    flexShrink: 0,
+                    padding: '2px 0 0 22px',
+                    fontSize: 12,
+                    color: '#6B6B6B',
+                    minHeight: 48,
+                    resize: 'none',
+                    lineHeight: 1.6,
                   }}
-                >
-                  ×
-                </button>
+                />
               </div>
             ))}
             <button
