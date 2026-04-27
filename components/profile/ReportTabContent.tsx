@@ -43,6 +43,14 @@ export default function ReportTabContent({ onOpenAiPanel, onNodesChange }: Repor
     })
   }
 
+  function handleNodeDeleted(id: string) {
+    setNodes(prev => {
+      const updated = prev.filter(n => n.id !== id)
+      onNodesChange?.(updated)
+      return updated
+    })
+  }
+
   if (loading) {
     return (
       <div style={{ padding: 24, color: '#B0ADA6', fontSize: 13 }}>加载中...</div>
@@ -54,6 +62,7 @@ export default function ReportTabContent({ onOpenAiPanel, onNodesChange }: Repor
       <ReportNodeTree
         nodes={nodes}
         onNodeSaved={handleNodeSaved}
+        onNodeDeleted={handleNodeDeleted}
         onOpenAiPanel={onOpenAiPanel}
       />
     </div>
