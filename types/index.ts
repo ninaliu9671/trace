@@ -20,14 +20,16 @@ export interface ReportNode {
   id: string
   user_id: string
   name: string
-  trigger_desc: string | null
   audience: string | null
   modules: ReportModule[]
-  parent_id: string | null
   sort_order: number
-  time_granularity: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | null
   is_active: boolean
+  style: string | null
   children?: ReportNode[]
+  // kept optional for backward-compat with existing data and tree logic
+  trigger_desc?: string | null
+  time_granularity?: string | null
+  parent_id?: string | null
 }
 
 export interface Dimension {
@@ -140,10 +142,8 @@ export interface ProfilePreviewProfileContent {
 
 export interface ProfilePreviewReportNode {
   name: string
-  trigger_desc?: string | null
   audience?: string | null
-  time_granularity?: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | null
-  parent_id?: string | null
+  style?: string | null
   modules?: ReportModule[]
 }
 
@@ -188,10 +188,8 @@ export interface OnboardingResult {
 
 export interface OnboardingReportNode {
   name: string
-  trigger_desc: string | null
   audience: string | null
-  time_granularity: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | null
-  parent_id: string | null
+  style: string | null
   modules: ReportModule[]
 }
 
