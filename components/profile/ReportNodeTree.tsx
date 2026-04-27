@@ -34,9 +34,10 @@ interface ReportNodeItemProps {
   depth: number
   allNodes: ReportNode[]
   onEdit: (node: ReportNode) => void
+  onDelete: (node: ReportNode) => void
 }
 
-function ReportNodeItem({ node, depth, allNodes, onEdit }: ReportNodeItemProps) {
+function ReportNodeItem({ node, depth, allNodes, onEdit, onDelete }: ReportNodeItemProps) {
   const isLeaf = !node.children || node.children.length === 0
 
   return (
@@ -75,22 +76,40 @@ function ReportNodeItem({ node, depth, allNodes, onEdit }: ReportNodeItemProps) 
               </span>
             )}
           </div>
-          <button
-            onClick={() => onEdit(node)}
-            style={{
-              fontSize: 11,
-              color: '#6B6B6B',
-              border: '1px solid #E8E4DD',
-              borderRadius: 5,
-              padding: '2px 8px',
-              background: 'transparent',
-              cursor: 'pointer',
-              flexShrink: 0,
-              marginLeft: 8,
-            }}
-          >
-            编辑
-          </button>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 8 }}>
+            <button
+              onClick={() => onEdit(node)}
+              style={{
+                fontSize: 11,
+                color: '#6B6B6B',
+                border: '1px solid #E8E4DD',
+                borderRadius: 5,
+                padding: '2px 8px',
+                background: 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              编辑
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm(`确认删除「${node.name}」？`)) {
+                  onDelete(node)
+                }
+              }}
+              style={{
+                fontSize: 11,
+                color: '#D94F4F',
+                border: '1px solid #F5C6C6',
+                borderRadius: 5,
+                padding: '2px 8px',
+                background: 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              删除
+            </button>
+          </div>
         </div>
 
         {node.audience && (
@@ -128,6 +147,7 @@ function ReportNodeItem({ node, depth, allNodes, onEdit }: ReportNodeItemProps) 
           depth={depth + 1}
           allNodes={allNodes}
           onEdit={onEdit}
+          onDelete={onDelete}
         />
       ))}
     </div>
@@ -137,10 +157,11 @@ function ReportNodeItem({ node, depth, allNodes, onEdit }: ReportNodeItemProps) 
 interface ReportNodeTreeProps {
   nodes: ReportNode[]
   onNodeSaved: (node: ReportNode) => void
+  onNodeDeleted: (id: string) => void
   onOpenAiPanel?: (triggerMessage: string) => void
 }
 
-export default function ReportNodeTree({ nodes, onNodeSaved, onOpenAiPanel }: ReportNodeTreeProps) {
+export default function ReportNodeTree({ nodes, onNodeSaved, onNodeDeleted, onOpenAiPanel }: ReportNodeTreeProps) {
   const [editingNode, setEditingNode] = useState<ReportNode | null>(null)
   const [showEditor, setShowEditor] = useState(false)
 
@@ -154,6 +175,18 @@ export default function ReportNodeTree({ nodes, onNodeSaved, onOpenAiPanel }: Re
   function handleAddNew() {
     setEditingNode(null)
     setShowEditor(true)
+  }
+
+  async function handleDelete(node: ReportNode) {
+    const res = await fetch('/api/report-nodes/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: node.id }),
+    })
+    const data = await res.json()
+    if (!data.error) {
+      onNodeDeleted(node.id)
+    }
   }
 
   if (nodes.length === 0) {
@@ -215,6 +248,7 @@ export default function ReportNodeTree({ nodes, onNodeSaved, onOpenAiPanel }: Re
           depth={0}
           allNodes={nodes}
           onEdit={handleEdit}
+          onDelete={handleDelete}
         />
       ))}
 

@@ -12,17 +12,17 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
 
+    const fields = {
+      name: body.name,
+      audience: body.audience ?? null,
+      style: body.style ?? null,
+      modules: body.modules ?? [],
+    }
+
     if (body.id) {
       const { data, error } = await sessionClient
         .from('report_nodes')
-        .update({
-          name: body.name,
-          trigger_desc: body.trigger_desc ?? null,
-          audience: body.audience ?? null,
-          modules: body.modules ?? [],
-          parent_id: body.parent_id ?? null,
-          time_granularity: body.time_granularity ?? null,
-        })
+        .update(fields)
         .eq('id', body.id)
         .eq('user_id', user.id)
         .select()
@@ -34,12 +34,7 @@ export async function POST(req: NextRequest) {
         .from('report_nodes')
         .insert({
           user_id: user.id,
-          name: body.name,
-          trigger_desc: body.trigger_desc ?? null,
-          audience: body.audience ?? null,
-          modules: body.modules ?? [],
-          parent_id: body.parent_id ?? null,
-          time_granularity: body.time_granularity ?? null,
+          ...fields,
           sort_order: body.sort_order ?? 99,
           is_active: true,
         })

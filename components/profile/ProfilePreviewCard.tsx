@@ -47,7 +47,7 @@ function ReportContent({ content }: { content: ProfilePreviewReportNode[] }) {
   return (
     <div style={{ fontSize: 12, color: '#1A1A1A', lineHeight: 1.8 }}>
       {content.slice(0, 5).map((node, i) => (
-        <div key={i}>· {node.name}{node.trigger_desc ? `（${node.trigger_desc}）` : ''}</div>
+        <div key={i}>· {node.name}{node.style ? `（${node.style}）` : ''}</div>
       ))}
       {content.length > 5 && <div style={{ color: '#B0ADA6' }}>…共 {content.length} 个节点</div>}
     </div>

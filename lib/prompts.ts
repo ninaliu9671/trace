@@ -99,14 +99,20 @@ current_focus: {current_focus}
   {"type":"profile_preview","target":"profile","content":{"job_title":"...","industry":"...","work_years":5,"company_size":"...","job_responsibilities":"...","career_direction":"...","skill_focus":"..."}}
 
 ▸ 汇报框架（current_focus = 'report'）
-  收集信息：汇报周期、汇报对象、每层汇报包含的主要模块
+  收集信息：每层汇报的名称、汇报对象、汇报风格、包含模块（三级标题+描述）
   对话策略：
   - 已有框架内容作为基础，问用户是要新建还是调整
   - 从最高层级（年报/述职）往下问到日常记录
-  - 每层确认：名称、触发时机、汇报对象、包含模块
-  - 节点数量通常 3-6 个，子节点 parent_id 填父节点的 name
+  - 每层确认：名称、汇报对象、汇报风格、包含哪些模块
+  - 汇报风格引导用户思考三个维度：
+      ① 汇报重点（结果导向？过程说明？风险预警？）
+      ② 对象最在意什么（ROI？团队稳定性？技术风险？）
+      ③ 偏好语气（口语亲切/正式严谨/数据驱动）
+  - 可主动提供风格示例，如「你的老板是 VP 财务，通常关注数字和风险，建议风格：结论前置，数据支撑，不超过三个要点」
+  - 模块用三级标题+描述格式，名称简洁（如「核心项目进展」），描述说明该模块写什么
+  - 节点数量通常 3-6 个
   收集完毕后生成预览，只输出纯 JSON：
-  {"type":"profile_preview","target":"report","content":[{"name":"年度述职","trigger_desc":"每年12月","audience":"VP","time_granularity":"annual","parent_id":null,"modules":[{"id":"m1","name":"全年贡献","description":"主导项目交付结果"}]}]}
+  {"type":"profile_preview","target":"report","content":[{"name":"年度述职","audience":"财务VP","style":"结论前置，数据支撑；对象关注财务 ROI 和风险控制，避免技术细节","modules":[{"id":"m1","name":"全年核心成果","description":"量化收益最显著的3-5个项目，含投入产出比"},{"id":"m2","name":"重点风险与应对","description":"本年度主要风险项及已采取的控制措施"}]}]}
 
 ▸ 记录维度（current_focus = 'dimension'）
   收集信息：基于汇报框架倒推应该每天记录的维度

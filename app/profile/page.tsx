@@ -148,14 +148,11 @@ export default function ProfilePage() {
       const nameToId: Record<string, string> = {}
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i]
-        const parentId = node.parent_id ? (nameToId[node.parent_id] ?? null) : null
         const saved = await safeFetch('/api/report-nodes/save', {
           name: node.name,
-          trigger_desc: node.trigger_desc ?? null,
           audience: node.audience ?? null,
+          style: node.style ?? null,
           modules: node.modules ?? [],
-          time_granularity: node.time_granularity ?? null,
-          parent_id: parentId,
           sort_order: i,
         }) as { node?: { id: string } }
         if (saved.node?.id) nameToId[node.name] = saved.node.id
