@@ -89,12 +89,20 @@ export default function SummaryPage() {
 
   async function handleFinalize() {
     if (!selectedSummary) return
-    await fetch(`/api/summary/${selectedSummary.id}/update`, {
+    const updateRes = await fetch(`/api/summary/${selectedSummary.id}/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: editorContent }),
     })
-    await fetch(`/api/summary/${selectedSummary.id}/finalize`, { method: 'POST' })
+    if (!updateRes.ok) {
+      const data = await updateRes.json().catch(() => ({}))
+      throw new Error((data as { error?: string }).error || '保存内容失败，请稍后重试')
+    }
+    const finalizeRes = await fetch(`/api/summary/${selectedSummary.id}/finalize`, { method: 'POST' })
+    if (!finalizeRes.ok) {
+      const data = await finalizeRes.json().catch(() => ({}))
+      throw new Error((data as { error?: string }).error || '定稿失败，请稍后重试')
+    }
     setSummaries(prev =>
       prev.map(s =>
         s.id === selectedSummary.id
@@ -108,7 +116,11 @@ export default function SummaryPage() {
 
   async function handleReEdit() {
     if (!selectedSummary) return
-    await fetch(`/api/summary/${selectedSummary.id}/re-edit`, { method: 'POST' })
+    const res = await fetch(`/api/summary/${selectedSummary.id}/re-edit`, { method: 'POST' })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error((data as { error?: string }).error || '操作失败，请稍后重试')
+    }
     setSummaries(prev =>
       prev.map(s =>
         s.id === selectedSummary.id

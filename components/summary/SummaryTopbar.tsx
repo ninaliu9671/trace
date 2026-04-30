@@ -35,14 +35,24 @@ export default function SummaryTopbar({
 
   async function handleFinalize() {
     setFinalizing(true)
-    await onFinalize()
-    setFinalizing(false)
+    try {
+      await onFinalize()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '定稿失败，请稍后重试')
+    } finally {
+      setFinalizing(false)
+    }
   }
 
   async function handleReEdit() {
     setReEditing(true)
-    await onReEdit()
-    setReEditing(false)
+    try {
+      await onReEdit()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '操作失败，请稍后重试')
+    } finally {
+      setReEditing(false)
+    }
   }
 
   return (

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient, createSessionClient } from '@/lib/supabase/server'
+import { createSessionClient } from '@/lib/supabase/server'
 
 export async function POST(
   req: NextRequest,
@@ -7,16 +7,15 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const sessionClient = await createSessionClient()
-    const { data: { user } } = await sessionClient.auth.getUser()
+    const supabase = await createSessionClient()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 })
 
     const { content }: { content: string } = await req.json()
-    const serverClient = createServerClient()
 
-    const { data: existing } = await serverClient
+    const { data: existing } = await supabase
       .from('summaries')
-      .select('id, is_draft, user_id')
+      .select('id, is_draft')
       .eq('id', id)
       .eq('user_id', user.id)
       .single()
@@ -24,10 +23,11 @@ export async function POST(
     if (!existing) return NextResponse.json({ error: '总结不存在' }, { status: 404 })
     if (!existing.is_draft) return NextResponse.json({ error: '定稿后不可修改' }, { status: 403 })
 
-    const { error } = await serverClient
+    const { error } = await supabase
       .from('summaries')
       .update({ content, updated_at: new Date().toISOString() })
       .eq('id', id)
+      .eq('user_id', user.id)
 
     if (error) throw error
     return NextResponse.json({ ok: true })
