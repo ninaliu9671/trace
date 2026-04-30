@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import Sidebar from '@/components/layout/Sidebar'
@@ -129,6 +129,7 @@ export default function ProfilePage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
+    const userId = user.id
 
     async function safeFetch(url: string, body: unknown): Promise<unknown> {
       const res = await fetch(url, {
@@ -186,7 +187,7 @@ export default function ProfilePage() {
     if (preview.type === 'profile_preview' && preview.target === 'profile') {
       const content = preview.content as Record<string, unknown>
       await safeFetch('/api/profile/update', content)
-      const { data } = await supabase.from('user_profiles').select('*').eq('id', user.id).single()
+      const { data } = await supabase.from('user_profiles').select('*').eq('id', userId).single()
       setProfile(data)
     }
 
@@ -204,7 +205,7 @@ export default function ProfilePage() {
         }) as { node?: { id: string } }
         if (saved.node?.id) nameToId[node.name] = saved.node.id
       }
-      const { data } = await supabase.from('report_nodes').select('*').eq('user_id', user.id).eq('is_active', true).order('sort_order')
+      const { data } = await supabase.from('report_nodes').select('*').eq('user_id', userId).eq('is_active', true).order('sort_order')
       setReportNodes(data ?? [])
       setReportRefreshKey(k => k + 1)
     }
@@ -213,7 +214,7 @@ export default function ProfilePage() {
       const { data: existingDimsRaw } = await supabase
         .from('dimensions')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('is_active', true)
         .order('sort_order')
       const existingDims = (existingDimsRaw ?? []) as Dimension[]
@@ -234,7 +235,7 @@ export default function ProfilePage() {
             .from('dimensions')
             .update({ is_active: false })
             .in('id', [...allToDelete])
-            .eq('user_id', user.id)
+            .eq('user_id', userId)
           if (error) throw error
         }
       }
@@ -242,7 +243,7 @@ export default function ProfilePage() {
       const { data: afterDeleteRaw } = await supabase
         .from('dimensions')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('is_active', true)
         .order('sort_order')
       let workingDims = (afterDeleteRaw ?? []) as Dimension[]
@@ -267,7 +268,7 @@ export default function ProfilePage() {
           sort_order: index,
           prompt_text: newLevel === 3 ? (target.prompt_text ?? null) : null,
         })
-        const { data } = await supabase.from('dimensions').select('*').eq('user_id', user.id).eq('is_active', true).order('sort_order')
+        const { data } = await supabase.from('dimensions').select('*').eq('user_id', userId).eq('is_active', true).order('sort_order')
         workingDims = (data ?? []) as Dimension[]
         dynamicNumberMap = buildDimensionNumberMap(workingDims)
       }
@@ -311,7 +312,7 @@ export default function ProfilePage() {
           prompt_text: level === 3 ? (node.prompt_text ?? null) : null,
         }) as { dimension?: { id: string } }
 
-        const { data } = await supabase.from('dimensions').select('*').eq('user_id', user.id).eq('is_active', true).order('sort_order')
+        const { data } = await supabase.from('dimensions').select('*').eq('user_id', userId).eq('is_active', true).order('sort_order')
         workingDims = (data ?? []) as Dimension[]
         dynamicNumberMap = buildDimensionNumberMap(workingDims)
 
@@ -342,7 +343,7 @@ export default function ProfilePage() {
       }
 
       await normalizeSortOrder(workingDims)
-      const { data } = await supabase.from('dimensions').select('*').eq('user_id', user.id).eq('is_active', true).order('sort_order')
+      const { data } = await supabase.from('dimensions').select('*').eq('user_id', userId).eq('is_active', true).order('sort_order')
       setDimensions((data ?? []) as Dimension[])
       setDimensionRefreshKey(k => k + 1)
     } else if (preview.type === 'profile_preview' && preview.target === 'dimension') {
@@ -350,7 +351,7 @@ export default function ProfilePage() {
       const { data: existingDimsRaw } = await supabase
         .from('dimensions')
         .select('id, name, icon, level, parent_id, sort_order, prompt_text, is_active')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('is_active', true)
         .order('sort_order')
 
@@ -407,11 +408,11 @@ export default function ProfilePage() {
           .from('dimensions')
           .update({ is_active: false })
           .in('id', toDeactivate)
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
         if (deactivateError) throw deactivateError
       }
 
-      const { data } = await supabase.from('dimensions').select('*').eq('user_id', user.id).eq('is_active', true).order('sort_order')
+      const { data } = await supabase.from('dimensions').select('*').eq('user_id', userId).eq('is_active', true).order('sort_order')
       setDimensions(data ?? [])
       setDimensionRefreshKey(k => k + 1)
     }
