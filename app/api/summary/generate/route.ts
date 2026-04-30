@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient, createSessionClient } from '@/lib/supabase/server'
+import { createSessionClient } from '@/lib/supabase/server'
 import { callAI } from '@/lib/ai'
 import { PROMPTS } from '@/lib/prompts'
+import { expandSelectedDimensionIds } from '@/lib/summary-dimensions'
 
 const priorityMap: Record<string, string[]> = {
   annual:    ['quarterly', 'monthly', 'weekly'],
@@ -38,13 +39,12 @@ export async function POST(req: NextRequest) {
       completeness: string
     } = await req.json()
 
-    const serverClient = createServerClient()
     const priorities = priorityMap[summaryType] ?? []
 
     // ── 1. 抓取定稿报告（优先级顺序）──────────────────────
     const foundSummaries: { type: string; content: string; date_from: string; date_to: string }[] = []
     for (const type of priorities) {
-      const { data } = await serverClient
+      const { data } = await sessionClient
         .from('summaries')
         .select('content, date_from, date_to, summary_type')
         .eq('user_id', user.id)
@@ -67,25 +67,53 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 2. 抓取原始日志（按维度过滤）──────────────────────
-    const { data: logs } = await serverClient
+    // 弹窗选择的是一级职能维度，日志写在叶子维度上，所以必须展开子孙维度。
+    const { data: allDimensions, error: dimensionsError } = await sessionClient
+      .from('dimensions')
+      .select('id, name, level, parent_id')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+
+    if (dimensionsError) throw dimensionsError
+
+    const expandedDimensionIds = expandSelectedDimensionIds(
+      dimensionIds,
+      (allDimensions ?? []).map(d => ({
+        id: d.id,
+        parent_id: d.parent_id,
+      }))
+    )
+
+    const level1Dimensions = (allDimensions ?? []).filter(d => d.level === 1)
+    const selectedLevel1Dimensions = level1Dimensions.filter(d => dimensionIds.includes(d.id))
+    const isAllLevel1Selected =
+      level1Dimensions.length > 0 && selectedLevel1Dimensions.length === level1Dimensions.length
+    const dimensionNamesForDataSource = isAllLevel1Selected
+      ? ['全部']
+      : selectedLevel1Dimensions.map(d => d.name)
+
+    const { data: logs } = await sessionClient
       .from('daily_logs')
       .select('log_date, content, dimension_id, dimensions(name, level, parent_id)')
       .eq('user_id', user.id)
-      .in('dimension_id', dimensionIds.length > 0 ? dimensionIds : ['__none__'])
+      .in('dimension_id', expandedDimensionIds.length > 0 ? expandedDimensionIds : ['__none__'])
       .gte('log_date', dateFrom)
       .lte('log_date', dateTo)
       .order('log_date')
 
     // ── 3. 抓取汇报框架（套用模板时）──────────────────────
     let reportFramework = '（未套用汇报框架，自由生成）'
+    let reportNodeName: string | undefined
     if (reportNodeId) {
-      const { data: node } = await serverClient
+      const { data: node } = await sessionClient
         .from('report_nodes')
         .select('name, trigger_desc, audience, modules')
         .eq('id', reportNodeId)
+        .eq('user_id', user.id)
         .single()
 
       if (node) {
+        reportNodeName = node.name
         const moduleNames = (node.modules as { name: string }[] ?? [])
           .map(m => m.name).join('、')
         reportFramework = [
@@ -113,6 +141,13 @@ export async function POST(req: NextRequest) {
       logsText && `## 日志记录（${(logs ?? []).length} 条）\n${logsText}`,
     ].filter(Boolean).join('\n\n')
 
+    if (!sourcesText) {
+      return NextResponse.json(
+        { error: '所选时间范围和维度下没有可用于生成总结的日志或定稿报告，请先补写日志。' },
+        { status: 400 }
+      )
+    }
+
     // ── 5. 组装 systemPrompt，调用 AI ────────────────────
     const systemPrompt = PROMPTS.summary_generate
       .replace('{report_framework}', reportFramework)
@@ -130,7 +165,7 @@ export async function POST(req: NextRequest) {
     const title = `${fromMonth}${TYPE_LABELS[summaryType] ?? '总结'}`
 
     // ── 7. 写入 summaries 表 ─────────────────────────────
-    const { data: newSummary, error: insertError } = await serverClient
+    const { data: newSummary, error: insertError } = await sessionClient
       .from('summaries')
       .insert({
         user_id: user.id,
@@ -144,6 +179,8 @@ export async function POST(req: NextRequest) {
           summaries_used: foundSummaries.map((_, i) => `ref_${i}`),
           logs_count: (logs ?? []).length,
           completeness,
+          dimension_names: dimensionNamesForDataSource,
+          report_node_name: reportNodeName,
         },
         is_draft: true,
       })
@@ -153,7 +190,8 @@ export async function POST(req: NextRequest) {
     if (insertError) throw insertError
 
     return NextResponse.json({ summary: newSummary })
-  } catch {
+  } catch (err) {
+    console.error('Generate summary error:', err)
     return NextResponse.json({ error: '生成失败，请稍后重试' }, { status: 500 })
   }
 }

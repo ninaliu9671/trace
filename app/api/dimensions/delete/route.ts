@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient, createSessionClient } from '@/lib/supabase/server'
+import { createSessionClient } from '@/lib/supabase/server'
 
 export async function POST(req: NextRequest) {
   try {
-    const sessionClient = await createSessionClient()
-    const { data: { user } } = await sessionClient.auth.getUser()
+    const supabase = await createSessionClient()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 })
 
     const { id }: { id: string } = await req.json()
-    const serverClient = createServerClient()
 
     // 拉取该用户所有活跃维度，在内存里找子孙
-    const { data: allDims } = await serverClient
+    const { data: allDims } = await supabase
       .from('dimensions')
       .select('id, parent_id')
       .eq('user_id', user.id)
@@ -29,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
     collectChildren(id)
 
-    const { error } = await serverClient
+    const { error } = await supabase
       .from('dimensions')
       .update({ is_active: false })
       .in('id', Array.from(toDelete))
@@ -37,7 +36,9 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error
     return NextResponse.json({ deletedIds: Array.from(toDelete) })
-  } catch {
-    return NextResponse.json({ error: '删除失败，请稍后重试' }, { status: 500 })
+  } catch (e) {
+    const msg = (e as { message?: string })?.message || String(e)
+    console.error('[dimensions/delete] error:', msg)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

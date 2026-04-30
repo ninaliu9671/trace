@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerClient, createSessionClient } from '@/lib/supabase/server'
+import { createSessionClient } from '@/lib/supabase/server'
 
 export async function GET() {
   try {
@@ -7,8 +7,7 @@ export async function GET() {
     const { data: { user } } = await sessionClient.auth.getUser()
     if (!user) return NextResponse.json({ error: '未登录' }, { status: 401 })
 
-    const serverClient = createServerClient()
-    const { data: summaries, error } = await serverClient
+    const { data: summaries, error } = await sessionClient
       .from('summaries')
       .select('*')
       .eq('user_id', user.id)
@@ -16,7 +15,8 @@ export async function GET() {
 
     if (error) throw error
     return NextResponse.json({ summaries: summaries ?? [] })
-  } catch {
+  } catch (err) {
+    console.error('Load summaries error:', err)
     return NextResponse.json({ error: '加载失败，请稍后重试' }, { status: 500 })
   }
 }

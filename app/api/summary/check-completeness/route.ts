@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient, createSessionClient } from '@/lib/supabase/server'
+import { createSessionClient } from '@/lib/supabase/server'
 
 const priorityMap: Record<string, string[]> = {
   annual:    ['quarterly', 'monthly', 'weekly'],
@@ -33,7 +33,6 @@ export async function POST(req: NextRequest) {
       summaryType: string
     } = await req.json()
 
-    const serverClient = createServerClient()
     const priorities = priorityMap[summaryType] ?? []
 
     const foundSummaries: { type: string; count: number; label: string }[] = []
@@ -41,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     // 按优先级查找定稿报告
     for (const type of priorities) {
-      const { data } = await serverClient
+      const { data } = await sessionClient
         .from('summaries')
         .select('id, date_from, date_to, summary_type')
         .eq('user_id', user.id)
@@ -75,7 +74,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 统计时间范围内的日志数量
-    const { count: logsCount } = await serverClient
+    const { count: logsCount } = await sessionClient
       .from('daily_logs')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
@@ -99,7 +98,8 @@ export async function POST(req: NextRequest) {
       missing_types: missingTypes,
       logs_count,
     })
-  } catch {
+  } catch (err) {
+    console.error('Check summary completeness error:', err)
     return NextResponse.json({ error: '检查失败，请稍后重试' }, { status: 500 })
   }
 }
