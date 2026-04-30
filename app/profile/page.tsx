@@ -25,7 +25,7 @@ import {
 import { buildDimensionNumberMap, validateAndNormalizeDimensionOps } from '@/lib/dimension-ops'
 
 type NestedAddNode = {
-  level?: 1 | 2 | 3
+  level?: number
   name?: string
   icon?: string
   prompt_text?: string | null
@@ -299,8 +299,7 @@ export default function ProfilePage() {
 
       async function createAddNode(node: NestedAddNode, parentId: string | null) {
         const parent = parentId ? workingDims.find(d => d.id === parentId) : null
-        const level = (node.level ?? (parent ? (parent.level + 1) : 1)) as 1 | 2 | 3
-        if (level > 3) throw new Error('新增层级超过三级，请调整母级。')
+        const level = node.level ?? (parent ? (parent.level + 1) : 1)
         const siblings = workingDims.filter(d => d.parent_id === parentId)
         const index = Math.max(0, Math.min(node.to_index ?? siblings.length, siblings.length))
         const saved = await safeFetch('/api/dimensions/save', {

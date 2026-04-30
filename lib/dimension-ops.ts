@@ -95,7 +95,7 @@ export function validateAndNormalizeDimensionOps(
       if (!normalized.parent_id && op.parent_n !== null && op.parent_id !== null && !parentCanBeDeferred) {
         errors.push(`新增操作母级不存在：${op.parent_n ?? op.parent_id}`)
       }
-      if (op.level && (op.level < 1 || op.level > 3)) errors.push('新增操作 level 非法')
+      if (op.level && op.level < 1) errors.push('新增操作 level 非法')
     }
 
     if (op.op === 'move' && normalized.target_id) {

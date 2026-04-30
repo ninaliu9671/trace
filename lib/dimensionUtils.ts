@@ -31,7 +31,7 @@ export interface NumberedDimension {
   n: string
   id: string
   name: string
-  level: 1 | 2 | 3
+  level: number
   parent_id: string | null
 }
 

@@ -37,7 +37,7 @@ export interface Dimension {
   user_id: string
   name: string
   icon: string
-  level: 1 | 2 | 3
+  level: number
   parent_id: string | null
   sort_order: number
   prompt_text: string | null
@@ -151,7 +151,7 @@ export interface ProfilePreviewReportNode {
 export interface ProfilePreviewDimension {
   name: string
   icon?: string
-  level: 1 | 2 | 3
+  level: number
   prompt_text?: string
   children?: ProfilePreviewDimension[]
 }
@@ -173,7 +173,7 @@ export interface DimensionOperation {
   to_parent_n?: string | null
   to_parent_id?: string | null
   to_index?: number
-  level?: 1 | 2 | 3
+  level?: number
   name?: string
   icon?: string
   prompt_text?: string | null
@@ -224,7 +224,7 @@ export interface OnboardingReportNode {
 export interface OnboardingDimension {
   name: string
   icon: string
-  level: 1 | 2 | 3
+  level: number
   prompt_text?: string
   children?: OnboardingDimension[]
 }

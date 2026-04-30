@@ -52,6 +52,21 @@ export default function DimensionTabContent({ onOpenAiPanel, onDimsChange }: Dim
     })
   }
 
+  async function handleDimensionMoved() {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase
+      .from('dimensions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .order('sort_order')
+    const updated = data ?? []
+    setDimensions(updated)
+    onDimsChange?.(updated)
+  }
+
   if (loading) return (
     <div style={{ padding: 24, color: '#B0ADA6', fontSize: 13 }}>加载中...</div>
   )
@@ -62,6 +77,7 @@ export default function DimensionTabContent({ onOpenAiPanel, onDimsChange }: Dim
         dimensions={dimensions}
         onDimensionSaved={handleDimensionSaved}
         onDimensionDeleted={handleDimensionDeleted}
+        onDimensionMoved={handleDimensionMoved}
         onOpenAiPanel={onOpenAiPanel}
       />
     </div>
