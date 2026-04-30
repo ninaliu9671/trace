@@ -16,7 +16,7 @@ export interface DimensionOpsValidationResult {
 }
 
 export function buildDimensionNumberMap(dimensions: DimensionLike[]): DimensionNumberMap {
-  const tree = buildDimensionTree(dimensions)
+  const tree = buildDimensionTree(dimensions as Dimension[])
   const numberToId = new Map<string, string>()
   const idToNumber = new Map<string, string>()
   const numberToName = new Map<string, string>()

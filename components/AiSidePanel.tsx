@@ -6,6 +6,7 @@ import {
   AiMessage,
   DimensionOpsPreview,
   ProfilePreview,
+  ProfilePreviewDimension,
   ProfilePreviewTarget,
   UserProfile,
   ReportNode,
@@ -301,7 +302,7 @@ export default function AiSidePanel({
   }
 
   function buildDimensionDeleteHint(previewDims: ProfilePreviewDimension[]): string | null {
-    const currentLevel1 = dimensions.filter(d => d.level === 1).map(d => d.name)
+    const currentLevel1 = (dimensions ?? []).filter(d => d.level === 1).map(d => d.name)
     const previewLevel1 = previewDims.map(d => d.name)
     const removed = currentLevel1.filter(name => !previewLevel1.includes(name))
     if (removed.length === 0) return null
