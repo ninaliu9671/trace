@@ -28,7 +28,6 @@ export default function SummaryPage() {
   const [editorContent, setEditorContent] = useState('')
   const [initialContent, setInitialContent] = useState('')
   const [editorMode, setEditorMode] = useState<'edit' | 'preview'>('preview')
-  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     async function fetchSummaries() {
@@ -61,25 +60,7 @@ export default function SummaryPage() {
     setEditorMode(nextSummary.is_draft ? 'edit' : 'preview')
   }
 
-  async function handleModeChange(mode: 'edit' | 'preview') {
-    if (mode === 'preview' && selectedSummary?.is_draft && editorContent !== initialContent) {
-      setSaving(true)
-      try {
-        await fetch(`/api/summary/${selectedSummary.id}/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: editorContent }),
-        })
-        setInitialContent(editorContent)
-        setSummaries(prev =>
-          prev.map(s => s.id === selectedSummary.id ? { ...s, content: editorContent } : s)
-        )
-      } catch {
-        // 保存失败不阻止切换
-      } finally {
-        setSaving(false)
-      }
-    }
+  function handleModeChange(mode: 'edit' | 'preview') {
     setEditorMode(mode)
   }
 
@@ -139,9 +120,11 @@ export default function SummaryPage() {
     return true
   }
 
+  const isFinalized = selectedSummary ? !selectedSummary.is_draft : false
+
   const aiExtraParams = selectedSummary
-    ? { currentContent: editorContent }
-    : { currentContent: '' }
+    ? { currentContent: editorContent, isFinalized }
+    : { currentContent: '', isFinalized: false }
 
   async function handleModalSubmit(params: NewSummaryParams) {
     setShowNewModal(false)
@@ -258,7 +241,6 @@ export default function SummaryPage() {
               content={editorContent}
               initialContent={initialContent}
               mode={editorMode}
-              saving={saving}
               onModeChange={handleModeChange}
               onRevert={handleRevert}
               onFinalize={handleFinalize}
@@ -317,6 +299,7 @@ export default function SummaryPage() {
         }
         apiRoute="/api/summary/ai-chat"
         extraBodyParams={aiExtraParams}
+        locked={isFinalized}
         onReplaceSuggestionAdopt={handleReplaceSuggestionAdopt}
       />
 

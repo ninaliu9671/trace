@@ -8,7 +8,6 @@ interface SummaryTopbarProps {
   content: string
   initialContent: string
   mode: 'edit' | 'preview'
-  saving: boolean
   onModeChange: (mode: 'edit' | 'preview') => void
   onRevert: () => void
   onFinalize: () => void
@@ -23,7 +22,7 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 export default function SummaryTopbar({
-  summary, content, initialContent, mode, saving,
+  summary, content, initialContent, mode,
   onModeChange, onRevert, onFinalize, onReEdit, aiOpen, onAiToggle,
 }: SummaryTopbarProps) {
   const [showRevert, setShowRevert] = useState(false)
@@ -91,7 +90,6 @@ export default function SummaryTopbar({
                 border: '1px solid #FDE68A',
               }}>草稿</span>
             )}
-            {saving && <span style={{ fontSize: 11, color: '#B0ADA6' }}>保存中...</span>}
           </div>
         </div>
 

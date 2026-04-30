@@ -43,6 +43,8 @@ interface AiSidePanelProps {
   // summary 页面专用
   extraBodyParams?: Record<string, unknown>
   onReplaceSuggestionAdopt?: (original: string, replacement: string) => boolean
+  // 定稿锁定：true 时拦截 replace_suggestion，改为提示用户先开启编辑模式
+  locked?: boolean
   // log 页面专用
   onLogPreviewAdopt?: (items: LogPreviewItem[]) => void
 }
@@ -67,6 +69,7 @@ export default function AiSidePanel({
   onConversationStateChange,
   extraBodyParams,
   onReplaceSuggestionAdopt,
+  locked,
   onLogPreviewAdopt,
 }: AiSidePanelProps) {
   const [messages, setMessages] = useState<AiMessage[]>([])
@@ -366,7 +369,12 @@ export default function AiSidePanel({
         throw new Error(data?.error || 'AI 服务暂时不可用，请稍后重试。')
       }
 
-      if (data.replaceSuggestion) {
+      if (data.replaceSuggestion && locked) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '当前报告已定稿，无法直接修改内容。请先点击右上角「重新编辑」按钮开启编辑模式，再让我帮你修改。',
+        }])
+      } else if (data.replaceSuggestion) {
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: data.content || '我已经整理好了，请查看下方建议。',
