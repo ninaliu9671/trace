@@ -28,6 +28,7 @@ export default function SummaryPage() {
   const [editorContent, setEditorContent] = useState('')
   const [initialContent, setInitialContent] = useState('')
   const [editorMode, setEditorMode] = useState<'edit' | 'preview'>('preview')
+  const [isReEditing, setIsReEditing] = useState(false)
 
   useEffect(() => {
     async function fetchSummaries() {
@@ -54,6 +55,7 @@ export default function SummaryPage() {
   function handleSelectSummary(id: string) {
     const nextSummary = summaries.find(s => s.id === id)
     setSelectedId(id)
+    setIsReEditing(false)
     if (!nextSummary) return
     setEditorContent(nextSummary.content)
     setInitialContent(nextSummary.content)
@@ -92,23 +94,12 @@ export default function SummaryPage() {
       )
     )
     setInitialContent(editorContent)
+    setIsReEditing(false)
     setEditorMode('preview')
   }
 
-  async function handleReEdit() {
-    if (!selectedSummary) return
-    const res = await fetch(`/api/summary/${selectedSummary.id}/re-edit`, { method: 'POST' })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error((data as { error?: string }).error || '操作失败，请稍后重试')
-    }
-    setSummaries(prev =>
-      prev.map(s =>
-        s.id === selectedSummary.id
-          ? { ...s, is_draft: true, finalized_at: null }
-          : s
-      )
-    )
+  function handleReEdit() {
+    setIsReEditing(true)
     setEditorMode('edit')
   }
 
@@ -120,7 +111,7 @@ export default function SummaryPage() {
     return true
   }
 
-  const isFinalized = selectedSummary ? !selectedSummary.is_draft : false
+  const isFinalized = selectedSummary ? (!selectedSummary.is_draft && !isReEditing) : false
 
   const aiExtraParams = selectedSummary
     ? { currentContent: editorContent, isFinalized }
@@ -241,6 +232,7 @@ export default function SummaryPage() {
               content={editorContent}
               initialContent={initialContent}
               mode={editorMode}
+              isReEditing={isReEditing}
               onModeChange={handleModeChange}
               onRevert={handleRevert}
               onFinalize={handleFinalize}
@@ -253,7 +245,7 @@ export default function SummaryPage() {
                 content={editorContent}
                 onChange={setEditorContent}
                 mode={editorMode}
-                locked={!selectedSummary.is_draft}
+                locked={isFinalized}
                 onSwitchToEdit={() => setEditorMode('edit')}
               />
             </div>

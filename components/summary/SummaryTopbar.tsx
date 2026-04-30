@@ -8,6 +8,7 @@ interface SummaryTopbarProps {
   content: string
   initialContent: string
   mode: 'edit' | 'preview'
+  isReEditing: boolean
   onModeChange: (mode: 'edit' | 'preview') => void
   onRevert: () => void
   onFinalize: () => void
@@ -22,15 +23,15 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 export default function SummaryTopbar({
-  summary, content, initialContent, mode,
+  summary, content, initialContent, mode, isReEditing,
   onModeChange, onRevert, onFinalize, onReEdit, aiOpen, onAiToggle,
 }: SummaryTopbarProps) {
   const [showRevert, setShowRevert] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
-  const [reEditing, setReEditing] = useState(false)
 
   const hasUnsavedChanges = content !== initialContent
-  const isFinalized = !summary.is_draft
+  // 定稿：DB 已定稿 且 用户未点击"重新编辑"
+  const isFinalized = !summary.is_draft && !isReEditing
 
   async function handleFinalize() {
     setFinalizing(true)
@@ -43,16 +44,6 @@ export default function SummaryTopbar({
     }
   }
 
-  async function handleReEdit() {
-    setReEditing(true)
-    try {
-      await onReEdit()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : '操作失败，请稍后重试')
-    } finally {
-      setReEditing(false)
-    }
-  }
 
   return (
     <>
@@ -155,18 +146,17 @@ export default function SummaryTopbar({
             </button>
           ) : (
             <button
-              onClick={handleReEdit}
-              disabled={reEditing}
+              onClick={onReEdit}
               style={{
                 padding: '5px 12px',
                 border: '1px solid #E8E4DD', borderRadius: 7,
                 background: 'transparent',
-                color: reEditing ? '#B0ADA6' : '#6B6B6B',
-                fontSize: 12, cursor: reEditing ? 'default' : 'pointer',
+                color: '#6B6B6B',
+                fontSize: 12, cursor: 'pointer',
                 fontFamily: 'inherit',
               }}
             >
-              {reEditing ? '处理中...' : '重新编辑'}
+              重新编辑
             </button>
           )}
         </div>

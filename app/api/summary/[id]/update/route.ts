@@ -15,13 +15,12 @@ export async function POST(
 
     const { data: existing } = await supabase
       .from('summaries')
-      .select('id, is_draft')
+      .select('id')
       .eq('id', id)
       .eq('user_id', user.id)
       .single()
 
     if (!existing) return NextResponse.json({ error: '总结不存在' }, { status: 404 })
-    if (!existing.is_draft) return NextResponse.json({ error: '定稿后不可修改' }, { status: 403 })
 
     const { error } = await supabase
       .from('summaries')
