@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ReportNode } from '@/types'
 import ReportNodeEditor from './ReportNodeEditor'
 
@@ -35,13 +35,33 @@ interface ReportNodeItemProps {
   allNodes: ReportNode[]
   onEdit: (node: ReportNode) => void
   onDelete: (node: ReportNode) => void
+  // drag props (only used at depth 0)
+  draggable?: boolean
+  isDragging?: boolean
+  isOver?: boolean
+  onDragStart?: () => void
+  onDragEnter?: () => void
+  onDragEnd?: () => void
 }
 
-function ReportNodeItem({ node, depth, allNodes, onEdit, onDelete }: ReportNodeItemProps) {
+function ReportNodeItem({
+  node, depth, allNodes, onEdit, onDelete,
+  draggable: isDraggable, isDragging, isOver,
+  onDragStart, onDragEnter, onDragEnd,
+}: ReportNodeItemProps) {
   const isLeaf = !node.children || node.children.length === 0
+  const [hovered, setHovered] = useState(false)
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div
+      style={{ position: 'relative', opacity: isDragging ? 0.4 : 1, transition: 'opacity 0.15s' }}
+      draggable={isDraggable}
+      onDragStart={onDragStart}
+      onDragEnter={onDragEnter}
+      onDragEnd={onDragEnd}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       {depth > 0 && (
         <div
           style={{
@@ -55,26 +75,58 @@ function ReportNodeItem({ node, depth, allNodes, onEdit, onDelete }: ReportNodeI
         />
       )}
 
+      {/* drop indicator line */}
+      {isOver && depth === 0 && (
+        <div style={{
+          position: 'absolute',
+          top: -3,
+          left: 0,
+          right: 0,
+          height: 3,
+          borderRadius: 2,
+          background: '#1D9E75',
+          zIndex: 1,
+        }} />
+      )}
+
       <div
         style={{
           marginLeft: depth * 20,
           marginBottom: 8,
           padding: '12px 14px',
           background: isLeaf ? '#F0FBF7' : '#FAFAF8',
-          border: `1px solid ${isLeaf ? '#9FE1CB' : '#E8E4DD'}`,
+          border: `1px solid ${isOver && depth === 0 ? '#1D9E75' : isLeaf ? '#9FE1CB' : '#E8E4DD'}`,
           borderRadius: 8,
+          cursor: isDraggable ? (hovered ? 'grab' : 'default') : 'default',
+          transition: 'border-color 0.12s',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ flex: 1 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: isLeaf ? '#0F6E56' : '#1A1A1A' }}>
-              {node.name}
-            </span>
-            {node.trigger_desc && (
-              <span style={{ fontSize: 12, color: '#B0ADA6', marginLeft: 8 }}>
-                {node.trigger_desc}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+            {isDraggable && (
+              <span style={{
+                fontSize: 14,
+                color: hovered ? '#B0ADA6' : 'transparent',
+                cursor: 'grab',
+                lineHeight: 1,
+                marginTop: 1,
+                flexShrink: 0,
+                transition: 'color 0.15s',
+                userSelect: 'none',
+              }}>
+                ⠿
               </span>
             )}
+            <div>
+              <span style={{ fontSize: 13, fontWeight: 500, color: isLeaf ? '#0F6E56' : '#1A1A1A' }}>
+                {node.name}
+              </span>
+              {node.trigger_desc && (
+                <span style={{ fontSize: 12, color: '#B0ADA6', marginLeft: 8 }}>
+                  {node.trigger_desc}
+                </span>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 8 }}>
             <button
@@ -113,13 +165,13 @@ function ReportNodeItem({ node, depth, allNodes, onEdit, onDelete }: ReportNodeI
         </div>
 
         {node.audience && (
-          <div style={{ fontSize: 12, color: '#6B6B6B', marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: '#6B6B6B', marginTop: 4, marginLeft: isDraggable ? 20 : 0 }}>
             汇报对象：{node.audience}
           </div>
         )}
 
         {node.modules.length > 0 && (
-          <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          <div style={{ marginTop: 6, marginLeft: isDraggable ? 20 : 0, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {node.modules.map(m => (
               <span
                 key={m.id}
@@ -158,14 +210,55 @@ interface ReportNodeTreeProps {
   nodes: ReportNode[]
   onNodeSaved: (node: ReportNode) => void
   onNodeDeleted: (id: string) => void
+  onNodesReordered: (nodes: ReportNode[]) => void
   onOpenAiPanel?: (triggerMessage: string) => void
 }
 
-export default function ReportNodeTree({ nodes, onNodeSaved, onNodeDeleted, onOpenAiPanel }: ReportNodeTreeProps) {
+export default function ReportNodeTree({ nodes, onNodeSaved, onNodeDeleted, onNodesReordered, onOpenAiPanel }: ReportNodeTreeProps) {
   const [editingNode, setEditingNode] = useState<ReportNode | null>(null)
   const [showEditor, setShowEditor] = useState(false)
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [overIndex, setOverIndex] = useState<number | null>(null)
+  const dragNodeRef = useRef<ReportNode | null>(null)
 
   const tree = buildTree(nodes)
+  // Only root nodes are draggable
+  const roots = tree
+
+  function handleDragStart(index: number, node: ReportNode) {
+    setDragIndex(index)
+    dragNodeRef.current = node
+  }
+
+  function handleDragEnter(index: number) {
+    if (dragIndex === null || index === dragIndex) return
+    setOverIndex(index)
+  }
+
+  function handleDragEnd() {
+    if (dragIndex !== null && overIndex !== null && dragIndex !== overIndex) {
+      const reordered = [...roots]
+      const [moved] = reordered.splice(dragIndex, 1)
+      reordered.splice(overIndex, 0, moved)
+      // Assign new sort_order
+      const updated = reordered.map((n, i) => ({ ...n, sort_order: i }))
+      // Merge children back into flat list
+      function flatten(n: ReportNode): ReportNode[] {
+        return [n, ...(n.children ?? []).flatMap(flatten)]
+      }
+      const reorderedFlat = updated.flatMap(flatten)
+      // Keep non-root nodes from original list as-is
+      const nonRoots = nodes.filter(n => n.parent_id)
+      const mergedFlat = [
+        ...reorderedFlat.filter(n => !n.parent_id),
+        ...nonRoots,
+      ]
+      onNodesReordered(mergedFlat)
+    }
+    setDragIndex(null)
+    setOverIndex(null)
+    dragNodeRef.current = null
+  }
 
   function handleEdit(node: ReportNode) {
     setEditingNode(node)
@@ -240,8 +333,11 @@ export default function ReportNodeTree({ nodes, onNodeSaved, onNodeDeleted, onOp
   }
 
   return (
-    <>
-      {tree.map(root => (
+    <div
+      onDragOver={e => e.preventDefault()}
+      onDrop={e => { e.preventDefault(); handleDragEnd() }}
+    >
+      {roots.map((root, index) => (
         <ReportNodeItem
           key={root.id}
           node={root}
@@ -249,6 +345,12 @@ export default function ReportNodeTree({ nodes, onNodeSaved, onNodeDeleted, onOp
           allNodes={nodes}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          draggable={roots.length > 1}
+          isDragging={dragIndex === index}
+          isOver={overIndex === index}
+          onDragStart={() => handleDragStart(index, root)}
+          onDragEnter={() => handleDragEnter(index)}
+          onDragEnd={handleDragEnd}
         />
       ))}
 
@@ -294,6 +396,6 @@ export default function ReportNodeTree({ nodes, onNodeSaved, onNodeDeleted, onOp
           onClose={() => setShowEditor(false)}
         />
       )}
-    </>
+    </div>
   )
 }

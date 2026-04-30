@@ -51,6 +51,21 @@ export default function ReportTabContent({ onOpenAiPanel, onNodesChange }: Repor
     })
   }
 
+  async function handleNodesReordered(reordered: ReportNode[]) {
+    setNodes(reordered)
+    onNodesChange?.(reordered)
+    // Persist new sort_order for root nodes only
+    const rootIds = reordered
+      .filter(n => !n.parent_id)
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(n => n.id)
+    await fetch('/api/report-nodes/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: rootIds }),
+    })
+  }
+
   if (loading) {
     return (
       <div style={{ padding: 24, color: '#B0ADA6', fontSize: 13 }}>加载中...</div>
@@ -63,6 +78,7 @@ export default function ReportTabContent({ onOpenAiPanel, onNodesChange }: Repor
         nodes={nodes}
         onNodeSaved={handleNodeSaved}
         onNodeDeleted={handleNodeDeleted}
+        onNodesReordered={handleNodesReordered}
         onOpenAiPanel={onOpenAiPanel}
       />
     </div>
