@@ -9,6 +9,7 @@ import SummaryGeneratingOverlay from '@/components/summary/SummaryGeneratingOver
 import MarkdownEditor from '@/components/summary/MarkdownEditor'
 import SummaryTopbar from '@/components/summary/SummaryTopbar'
 import { Summary, CompletenessResult, NewSummaryParams } from '@/types'
+import { isCompletenessResult } from '@/lib/summary-result'
 
 export default function SummaryPage() {
   const [summaries, setSummaries] = useState<Summary[]>([])
@@ -32,23 +33,33 @@ export default function SummaryPage() {
   useEffect(() => {
     async function fetchSummaries() {
       setLoading(true)
-      const res = await fetch('/api/summary/list')
-      const data = await res.json()
-      setSummaries(data.summaries ?? [])
-      setLoading(false)
+      try {
+        const res = await fetch('/api/summary/list')
+        const data = await res.json()
+        if (!res.ok || data?.error) {
+          throw new Error(data?.error || '加载失败，请稍后重试')
+        }
+        setSummaries(data.summaries ?? [])
+      } catch (err) {
+        console.error('Load summaries failed:', err)
+        setSummaries([])
+      } finally {
+        setLoading(false)
+      }
     }
     fetchSummaries()
   }, [])
 
   const selectedSummary = summaries.find(s => s.id === selectedId) ?? null
 
-  // 选中总结时同步编辑器内容
-  useEffect(() => {
-    if (!selectedSummary) return
-    setEditorContent(selectedSummary.content)
-    setInitialContent(selectedSummary.content)
-    setEditorMode(selectedSummary.is_draft ? 'edit' : 'preview')
-  }, [selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
+  function handleSelectSummary(id: string) {
+    const nextSummary = summaries.find(s => s.id === id)
+    setSelectedId(id)
+    if (!nextSummary) return
+    setEditorContent(nextSummary.content)
+    setInitialContent(nextSummary.content)
+    setEditorMode(nextSummary.is_draft ? 'edit' : 'preview')
+  }
 
   async function handleModeChange(mode: 'edit' | 'preview') {
     if (mode === 'preview' && selectedSummary?.is_draft && editorContent !== initialContent) {
@@ -134,8 +145,13 @@ export default function SummaryPage() {
           summaryType: params.summaryType,
         }),
       })
-      const data: CompletenessResult = await res.json()
+      const data: unknown = await res.json()
       setCheckingCompleteness(false)
+      if (!res.ok || !isCompletenessResult(data)) {
+        alert((data as { error?: string })?.error ?? '检查数据失败，请稍后重试')
+        setPendingParams(null)
+        return
+      }
       if (data.completeness === 'complete') {
         handleStartGenerate(params, data)
       } else {
@@ -165,10 +181,14 @@ export default function SummaryPage() {
         }),
       })
       const data = await res.json()
-      if (data.error) { alert(data.error); return }
+      if (!res.ok || data.error) { alert(data.error ?? '生成失败，请稍后重试'); return }
+      if (!data.summary) { alert('生成失败：未返回总结内容'); return }
       const newSummary: Summary = data.summary
       setSummaries(prev => [newSummary, ...prev])
       setSelectedId(newSummary.id)
+      setEditorContent(newSummary.content)
+      setInitialContent(newSummary.content)
+      setEditorMode(newSummary.is_draft ? 'edit' : 'preview')
     } catch {
       alert('生成失败，请稍后重试')
     } finally {
@@ -213,7 +233,7 @@ export default function SummaryPage() {
             {loading ? (
               <div style={{ padding: '16px 14px', fontSize: 12, color: '#B0ADA6' }}>加载中...</div>
             ) : (
-              <SummaryList summaries={summaries} selectedId={selectedId} onSelect={setSelectedId} />
+              <SummaryList summaries={summaries} selectedId={selectedId} onSelect={handleSelectSummary} />
             )}
           </div>
         </div>

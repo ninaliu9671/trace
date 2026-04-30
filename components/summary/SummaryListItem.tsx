@@ -1,6 +1,10 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Summary } from '@/types'
+
+const DOC_PANEL_WIDTH = 260
+const DOC_PANEL_GAP = 8
 
 interface SummaryListItemProps {
   summary: Summary
@@ -55,8 +59,45 @@ function PropertyRow({ label, value }: { label: string; value: string }) {
 
 export default function SummaryListItem({ summary, isSelected, onSelect }: SummaryListItemProps) {
   const [propOpen, setPropOpen] = useState(false)
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null)
   const propRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLDivElement>(null)
+
+  const computePanelPosition = useCallback(() => {
+    if (!propOpen || !triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    let left = rect.right + DOC_PANEL_GAP
+    const top = Math.max(
+      DOC_PANEL_GAP,
+      Math.min(rect.top, window.innerHeight - DOC_PANEL_GAP - 240)
+    )
+    if (left + DOC_PANEL_WIDTH > window.innerWidth - DOC_PANEL_GAP) {
+      left = rect.left - DOC_PANEL_WIDTH - DOC_PANEL_GAP
+    }
+    left = Math.max(
+      DOC_PANEL_GAP,
+      Math.min(left, window.innerWidth - DOC_PANEL_WIDTH - DOC_PANEL_GAP)
+    )
+    setPanelPos({ top, left })
+  }, [propOpen])
+
+  useLayoutEffect(() => {
+    if (!propOpen) return
+    computePanelPosition()
+  }, [propOpen, computePanelPosition])
+
+  useEffect(() => {
+    if (!propOpen) return
+    function handleScrollOrResize() {
+      computePanelPosition()
+    }
+    window.addEventListener('scroll', handleScrollOrResize, true)
+    window.addEventListener('resize', handleScrollOrResize)
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true)
+      window.removeEventListener('resize', handleScrollOrResize)
+    }
+  }, [propOpen, computePanelPosition])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -74,6 +115,9 @@ export default function SummaryListItem({ summary, isSelected, onSelect }: Summa
   const typeLabel = TYPE_LABELS[summary.summary_type] ?? '总结'
   const dateRange = formatDateRange(summary.date_from, summary.date_to)
   const dimNames: string[] = summary.data_sources?.dimension_names ?? []
+  const frameworkLabel =
+    summary.data_sources?.report_node_name ??
+    (summary.report_node_id ? '已套用' : '未套用（自由生成）')
 
   return (
     <div style={{ position: 'relative' }}>
@@ -125,8 +169,8 @@ export default function SummaryListItem({ summary, isSelected, onSelect }: Summa
           {dateRange}
         </div>
 
-        {/* 第三行：维度标签（最多显示 3 个） */}
-        {dimNames.length > 0 && (
+        {/* 第三行：维度标签（最多显示 3 个）；“全部”不在列表卡片展示 */}
+        {dimNames.length > 0 && !(dimNames.length === 1 && dimNames[0] === '全部') && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 4 }}>
             {dimNames.slice(0, 3).map((name, i) => (
               <span key={i} style={{
@@ -180,49 +224,81 @@ export default function SummaryListItem({ summary, isSelected, onSelect }: Summa
         </div>
       </div>
 
-      {/* 文档属性浮层 */}
-      {propOpen && (
-        <div
-          ref={propRef}
-          style={{
-            position: 'absolute',
-            left: '100%',
-            top: 0,
-            zIndex: 30,
-            width: 240,
-            background: '#FFFFFF',
-            border: '1px solid #E8E4DD',
-            borderRadius: 8,
-            padding: '12px 14px',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-            fontSize: 12,
-            color: '#1A1A1A',
-            lineHeight: 1.8,
-          }}
-          onClick={e => e.stopPropagation()}
-        >
-          <PropertyRow label="时间范围" value={dateRange} />
-          <PropertyRow label="报告类型" value={typeLabel} />
-          <PropertyRow
-            label="职能维度"
-            value={dimNames.length > 0 ? dimNames.join('、') : '—'}
-          />
-          <PropertyRow
-            label="汇报框架"
-            value={summary.report_node_id ? '已套用' : '未套用（自由生成）'}
-          />
-          <PropertyRow
-            label="数据来源"
-            value={formatDataSources(summary.data_sources)}
-          />
-          {summary.finalized_at && (
+      {/* 文档属性浮窗（portal + fixed，避免被侧栏 overflow 裁剪） */}
+      {propOpen && panelPos && typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={propRef}
+            role="dialog"
+            aria-label="文档属性"
+            style={{
+              position: 'fixed',
+              left: panelPos.left,
+              top: panelPos.top,
+              zIndex: 100,
+              width: DOC_PANEL_WIDTH,
+              background: '#FFFFFF',
+              border: '1px solid #E8E4DD',
+              borderRadius: 10,
+              padding: '12px 14px',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.12)',
+              fontSize: 12,
+              color: '#1A1A1A',
+              lineHeight: 1.8,
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 10,
+              paddingBottom: 8,
+              borderBottom: '1px solid #F0EDE8',
+              fontSize: 12,
+              fontWeight: 600,
+              color: '#1A1A1A',
+            }}>
+              <span>文档属性</span>
+              <button
+                type="button"
+                aria-label="关闭"
+                onClick={e => {
+                  e.stopPropagation()
+                  setPropOpen(false)
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontSize: 16,
+                  lineHeight: 1,
+                  color: '#B0ADA6',
+                  padding: 0,
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <PropertyRow label="时间范围" value={dateRange} />
+            <PropertyRow label="汇报框架" value={frameworkLabel} />
             <PropertyRow
-              label="定稿时间"
-              value={summary.finalized_at.slice(0, 10)}
+              label="职能维度"
+              value={dimNames.length > 0 ? dimNames.join('、') : '—'}
             />
-          )}
-        </div>
-      )}
+            <PropertyRow
+              label="数据来源"
+              value={formatDataSources(summary.data_sources)}
+            />
+            {summary.finalized_at && (
+              <PropertyRow
+                label="定稿时间"
+                value={summary.finalized_at.slice(0, 10)}
+              />
+            )}
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

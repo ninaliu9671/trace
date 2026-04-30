@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import { Dimension, ReportNode, NewSummaryParams } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import {
-  toDateString,
   getThisWeekRange,
   getThisMonthRange,
   getThisQuarterRange,
@@ -24,14 +23,6 @@ const PRESET_LABELS: Record<DatePreset, string> = {
   custom:  '自定义',
 }
 
-const TYPE_OPTIONS: { value: SummaryType; label: string }[] = [
-  { value: 'weekly',    label: '周报' },
-  { value: 'monthly',   label: '月报' },
-  { value: 'quarterly', label: '季报' },
-  { value: 'annual',    label: '年报/述职' },
-  { value: 'adhoc',     label: '临时汇报' },
-]
-
 const PRESET_TO_TYPE: Record<DatePreset, SummaryType | null> = {
   week:    'weekly',
   month:   'monthly',
@@ -39,12 +30,11 @@ const PRESET_TO_TYPE: Record<DatePreset, SummaryType | null> = {
   custom:  null,
 }
 
-const TYPE_GRANULARITY: Record<string, string | null> = {
-  weekly:    'weekly',
-  monthly:   'monthly',
+const GRANULARITY_TO_TYPE: Record<string, SummaryType> = {
+  weekly: 'weekly',
+  monthly: 'monthly',
   quarterly: 'quarterly',
-  annual:    'annual',
-  adhoc:     null,
+  annual: 'annual',
 }
 
 const dateInputStyle: React.CSSProperties = {
@@ -86,8 +76,8 @@ export default function NewSummaryModal({ onClose, onSubmit }: NewSummaryModalPr
   const [summaryType, setSummaryType] = useState<SummaryType>('weekly')
   const [selectedDimIds, setSelectedDimIds] = useState<string[]>([])
   const [dimensions, setDimensions] = useState<Dimension[]>([])
-  const [matchedNode, setMatchedNode] = useState<ReportNode | null>(null)
-  const [useTemplate, setUseTemplate] = useState(true)
+  const [reportNodes, setReportNodes] = useState<ReportNode[]>([])
+  const [selectedReportNodeId, setSelectedReportNodeId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -113,12 +103,9 @@ export default function NewSummaryModal({ onClose, onSubmit }: NewSummaryModalPr
     fetchDimensions()
   }, [])
 
-  // 根据报告类型检测匹配的汇报框架节点
+  // 拉取可用汇报框架节点（职业档案中已配置）
   useEffect(() => {
-    async function detectTemplate() {
-      const granularity = TYPE_GRANULARITY[summaryType]
-      if (!granularity) { setMatchedNode(null); return }
-
+    async function fetchReportNodes() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -128,20 +115,30 @@ export default function NewSummaryModal({ onClose, onSubmit }: NewSummaryModalPr
         .select('*')
         .eq('user_id', user.id)
         .eq('is_active', true)
-        .eq('time_granularity', granularity)
-        .limit(1)
-        .single()
+        .order('sort_order')
 
-      setMatchedNode(data ?? null)
-      if (data) setUseTemplate(true)
+      const nodes = (data ?? []) as ReportNode[]
+      setReportNodes(nodes)
+
+      if (nodes.length > 0) {
+        setSelectedReportNodeId(prev => prev ?? nodes[0].id)
+      }
     }
-    detectTemplate()
-  }, [summaryType])
+    fetchReportNodes()
+  }, [])
 
   function handlePresetChange(preset: DatePreset) {
     setDatePreset(preset)
     const defaultType = PRESET_TO_TYPE[preset]
-    if (defaultType) setSummaryType(defaultType)
+    if (defaultType) {
+      setSummaryType(defaultType)
+      if (reportNodes.length > 0) {
+        const preferred = reportNodes.find(
+          n => n.time_granularity && GRANULARITY_TO_TYPE[n.time_granularity] === defaultType
+        )
+        if (preferred) setSelectedReportNodeId(preferred.id)
+      }
+    }
   }
 
   function getDateRange(): { from: string; to: string } | null {
@@ -162,6 +159,10 @@ export default function NewSummaryModal({ onClose, onSubmit }: NewSummaryModalPr
       setError('请至少选择一个职能维度')
       return
     }
+    if (!selectedReportNodeId) {
+      setError('请选择一个汇报框架（请先在职业档案中配置）')
+      return
+    }
 
     setSubmitting(true)
     setError(null)
@@ -170,7 +171,7 @@ export default function NewSummaryModal({ onClose, onSubmit }: NewSummaryModalPr
       dateTo: range.to,
       summaryType,
       dimensionIds: selectedDimIds,
-      reportNodeId: useTemplate && matchedNode ? matchedNode.id : null,
+      reportNodeId: selectedReportNodeId,
     })
   }
 
@@ -305,59 +306,48 @@ export default function NewSummaryModal({ onClose, onSubmit }: NewSummaryModalPr
             )}
           </Section>
 
-          {/* 报告类型 */}
-          <Section label="报告类型" optional>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {TYPE_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setSummaryType(opt.value)}
-                  style={{
-                    padding: '5px 12px',
-                    border: `1px solid ${summaryType === opt.value ? '#1D9E75' : '#E8E4DD'}`,
-                    borderRadius: 6,
-                    background: summaryType === opt.value ? '#F0FBF7' : 'transparent',
-                    color: summaryType === opt.value ? '#0F6E56' : '#6B6B6B',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </Section>
-
-          {/* 汇报框架模板检测提示 */}
-          {matchedNode && useTemplate && (
-            <div style={{
-              border: '1px solid #9FE1CB',
-              borderRadius: 8,
-              background: '#F0FBF7',
-              padding: '10px 14px',
-              marginBottom: 20,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 10,
-            }}>
-              <div style={{ fontSize: 12, color: '#0F6E56' }}>
-                <span style={{ marginRight: 6 }}>✦</span>
-                将套用「{matchedNode.name}」生成
+          {/* 汇报框架 */}
+          <Section label="汇报框架" required>
+            {reportNodes.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#B0ADA6' }}>暂无可用汇报框架，请先在职业档案中配置。</div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {reportNodes.map(node => {
+                  const checked = selectedReportNodeId === node.id
+                  const granularity = node.time_granularity ?? 'custom'
+                  return (
+                    <button
+                      key={node.id}
+                      onClick={() => {
+                        setSelectedReportNodeId(node.id)
+                        if (granularity in GRANULARITY_TO_TYPE) {
+                          setSummaryType(GRANULARITY_TO_TYPE[granularity])
+                        } else {
+                          setSummaryType('adhoc')
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '5px 10px',
+                        border: `1px solid ${checked ? '#1D9E75' : '#E8E4DD'}`,
+                        borderRadius: 6,
+                        background: checked ? '#F0FBF7' : 'transparent',
+                        color: checked ? '#0F6E56' : '#6B6B6B',
+                        fontSize: 12,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      <span>{node.name}</span>
+                      {checked && <span style={{ fontSize: 10 }}>✓</span>}
+                    </button>
+                  )
+                })}
               </div>
-              <button
-                onClick={() => setUseTemplate(false)}
-                style={{
-                  fontSize: 11, color: '#B0ADA6',
-                  background: 'transparent', border: 'none',
-                  cursor: 'pointer', flexShrink: 0, padding: 0,
-                }}
-              >
-                不套用
-              </button>
-            </div>
-          )}
+            )}
+          </Section>
 
           {/* 错误提示 */}
           {error && (
@@ -390,14 +380,14 @@ export default function NewSummaryModal({ onClose, onSubmit }: NewSummaryModalPr
           </button>
           <button
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || !selectedReportNodeId}
             style={{
               padding: '8px 18px',
               border: 'none', borderRadius: 7,
-              background: submitting ? '#6B6B6B' : '#1A1A1A',
+              background: submitting || !selectedReportNodeId ? '#6B6B6B' : '#1A1A1A',
               color: '#FFFFFF',
               fontSize: 13, fontWeight: 500,
-              cursor: submitting ? 'default' : 'pointer',
+              cursor: submitting || !selectedReportNodeId ? 'default' : 'pointer',
               fontFamily: 'inherit',
             }}
           >

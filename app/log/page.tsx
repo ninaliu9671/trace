@@ -19,7 +19,7 @@ export default function LogPage() {
   const [fieldStates, setFieldStates] = useState<Record<string, LogFieldState>>({})
   const [locked, setLocked] = useState(false)
   const [savedAt, setSavedAt] = useState<string | null>(null)
-  const [activeLeafId, setActiveLeafId] = useState<string | null>(null)
+  const [activeLevel2Id, setActiveLevel2Id] = useState<string | null>(null)
   const [dataLoading, setDataLoading] = useState(true)
 
   useEffect(() => {
@@ -96,12 +96,12 @@ export default function LogPage() {
 
 
   useEffect(() => {
-    if (activeLeafId && dimensions.some(d => d.id === activeLeafId && d.level === 3)) {
+    if (activeLevel2Id && dimensions.some(d => d.id === activeLevel2Id && d.level === 2)) {
       return
     }
-    const firstLeaf = dimensions.find(d => d.level === 3)
-    setActiveLeafId(firstLeaf?.id ?? null)
-  }, [dimensions, activeLeafId])
+    const firstLevel2 = dimensions.find(d => d.level === 2)
+    setActiveLevel2Id(firstLevel2?.id ?? null)
+  }, [dimensions, activeLevel2Id])
 
   function handleFieldChange(dimensionId: string, content: string, isAiFilled = false) {
     setFieldStates(prev => ({
@@ -245,8 +245,8 @@ export default function LogPage() {
               <DimensionDirectory
                 dimensions={dimensions}
                 fieldStates={fieldStates}
-                activeLeafId={activeLeafId}
-                onLeafClick={setActiveLeafId}
+                activeLevel2Id={activeLevel2Id}
+                onLevel2Click={setActiveLevel2Id}
               />
             )}
           </div>
@@ -260,7 +260,8 @@ export default function LogPage() {
                   dimensions={dimensions}
                   fieldStates={fieldStates}
                   locked={locked}
-                  activeLeafId={activeLeafId}
+                  activeLevel2Id={activeLevel2Id}
+                  onLeafFocus={setActiveLevel2Id}
                   onFieldChange={handleFieldChange}
                 />
                 {!locked && (

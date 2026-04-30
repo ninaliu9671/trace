@@ -8,7 +8,8 @@ interface LogContentProps {
   dimensions: Dimension[]
   fieldStates: Record<string, LogFieldState>
   locked: boolean
-  activeLeafId: string | null
+  activeLevel2Id: string | null
+  onLeafFocus: (level2Id: string) => void
   onFieldChange: (dimensionId: string, content: string, isAiFilled?: boolean) => void
 }
 
@@ -24,7 +25,8 @@ export default function LogContent({
   dimensions,
   fieldStates,
   locked,
-  activeLeafId,
+  activeLevel2Id,
+  onLeafFocus,
   onFieldChange,
 }: LogContentProps) {
   const tree = buildDimensionTree(dimensions)
@@ -69,7 +71,8 @@ export default function LogContent({
                 dimension={leaf}
                 fieldState={fieldStates[leaf.id] ?? { content: '', isAiFilled: false }}
                 locked={locked}
-                isActive={activeLeafId === leaf.id}
+                isActive={leaf.parent_id === activeLevel2Id}
+                onFocus={() => onLeafFocus(leaf.parent_id!)}
                 onChange={(content, isAiFilled) => onFieldChange(leaf.id, content, isAiFilled)}
               />
             ))}

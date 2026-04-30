@@ -1,5 +1,6 @@
 'use client'
 import { CompletenessResult } from '@/types'
+import { normalizeCompletenessResult } from '@/lib/summary-result'
 
 interface DataCompletenessAlertProps {
   result: CompletenessResult
@@ -10,6 +11,8 @@ interface DataCompletenessAlertProps {
 export default function DataCompletenessAlert({
   result, onProceed, onCancel,
 }: DataCompletenessAlertProps) {
+  const safeResult = normalizeCompletenessResult(result)
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 50,
@@ -32,7 +35,7 @@ export default function DataCompletenessAlert({
 
         {/* 已找到的数据 */}
         <div style={{ marginBottom: 12 }}>
-          {result.found_summaries.map((item, i) => (
+          {safeResult.found_summaries.map((item, i) => (
             <div key={i} style={{
               display: 'flex', alignItems: 'flex-start', gap: 8,
               fontSize: 13, color: '#1A1A1A', lineHeight: 1.6,
@@ -44,7 +47,7 @@ export default function DataCompletenessAlert({
           ))}
 
           {/* 缺失的数据 */}
-          {result.missing_types.map((item, i) => (
+          {safeResult.missing_types.map((item, i) => (
             <div key={i} style={{
               display: 'flex', alignItems: 'flex-start', gap: 8,
               fontSize: 13, color: '#6B6B6B', lineHeight: 1.6,
@@ -62,12 +65,12 @@ export default function DataCompletenessAlert({
             marginBottom: 6,
           }}>
             <span style={{ color: '#1D9E75', flexShrink: 0, marginTop: 2 }}>✓</span>
-            <span>找到 {result.logs_count} 条日志记录</span>
+            <span>找到 {safeResult.logs_count} 条日志记录</span>
           </div>
         </div>
 
         {/* 提示说明 */}
-        {result.completeness === 'logs_only' && (
+        {safeResult.completeness === 'logs_only' && (
           <div style={{
             fontSize: 12, color: '#B0ADA6',
             background: '#F8F7F4', borderRadius: 6, padding: '8px 12px',
@@ -76,7 +79,7 @@ export default function DataCompletenessAlert({
             数据较少，AI 将直接基于日志生成，可能不够全面。
           </div>
         )}
-        {result.completeness === 'partial' && (
+        {safeResult.completeness === 'partial' && (
           <div style={{
             fontSize: 12, color: '#B0ADA6',
             background: '#F8F7F4', borderRadius: 6, padding: '8px 12px',

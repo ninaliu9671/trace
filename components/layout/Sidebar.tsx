@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
   { href: '/profile', icon: '◉', label: '职业档案' },
@@ -11,7 +12,14 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const profileIncomplete = true
+
+  async function handleSignOut() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   return (
     <aside className="flex w-[172px] shrink-0 flex-col border-r border-[#E0DDD6] bg-[#EDEAE4]">
@@ -49,13 +57,20 @@ export default function Sidebar() {
 
       <div className="border-t border-[#E0DDD6] px-[8px] py-[10px]">
         <div className="flex items-center gap-[8px] rounded-[7px] px-[10px] py-[7px]">
-          <div className="flex h-[28px] w-[28px] items-center justify-center rounded-full bg-white text-[12px] text-[#6B6B6B]">
+          <div className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-full bg-white text-[12px] text-[#6B6B6B]">
             N
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="truncate text-[12px] font-medium text-[#1A1A1A]">Nina</div>
             <div className="truncate text-[11px] text-[#6B6B6B]">已登录用户</div>
           </div>
+          <button
+            onClick={handleSignOut}
+            title="退出登录"
+            className="shrink-0 rounded-[5px] px-[6px] py-[4px] text-[11px] text-[#B0ADA6] hover:bg-[#E4E0D8] hover:text-[#6B6B6B]"
+          >
+            退出
+          </button>
         </div>
       </div>
     </aside>

@@ -1,27 +1,40 @@
 'use client'
-import { useState } from 'react'
 import { LogPreview } from '@/types'
 
 interface LogPreviewCardProps {
   data: LogPreview
+  adopted?: boolean
+  discarded?: boolean
   onAdopt: () => void
+  onDiscard: () => void
 }
 
-export default function LogPreviewCard({ data, onAdopt }: LogPreviewCardProps) {
-  const [adopted, setAdopted] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+export default function LogPreviewCard({ data, adopted = false, discarded = false, onAdopt, onDiscard }: LogPreviewCardProps) {
+  const safeItems = Array.isArray(data?.items)
+    ? data.items.filter(item =>
+        Boolean(
+          (item?.dimension_name && String(item.dimension_name).trim()) ||
+          (item?.content && String(item.content).trim())
+        )
+      )
+    : []
 
-  if (dismissed) return null
+  if (discarded) return null
 
   return (
     <div
       style={{
         background: '#F0FBF7',
-        border: '1px solid #9FE1CB',
+        borderWidth: 1,
+        borderStyle: 'solid',
+        borderColor: '#9FE1CB',
         borderRadius: 8,
         overflow: 'hidden',
         alignSelf: 'flex-start',
-        maxWidth: '90%',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        minHeight: 88,
       }}
     >
       {/* 标题 */}
@@ -34,12 +47,17 @@ export default function LogPreviewCard({ data, onAdopt }: LogPreviewCardProps) {
           color: '#0F6E56',
         }}
       >
-        ✦ AI 整理结果 · {data.items.length} 条
+        ✦ AI 整理结果 · {safeItems.length} 条
       </div>
 
       {/* 预览条目 */}
       <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {data.items.map((item, i) => (
+        {safeItems.length === 0 && (
+          <div style={{ fontSize: 12, color: '#6B6B6B', lineHeight: 1.7 }}>
+            本次整理结果为空，请让我重新整理一版后再确认。
+          </div>
+        )}
+        {safeItems.map((item, i) => (
           <div key={i}>
             <div
               style={{
@@ -52,10 +70,10 @@ export default function LogPreviewCard({ data, onAdopt }: LogPreviewCardProps) {
                 marginBottom: 4,
               }}
             >
-              {item.dimension_name}
+              {item.dimension_name || '未命名维度'}
             </div>
             <div style={{ fontSize: 12, color: '#1A1A1A', lineHeight: 1.7 }}>
-              {item.content}
+              {item.content || '（无内容）'}
             </div>
           </div>
         ))}
@@ -72,23 +90,24 @@ export default function LogPreviewCard({ data, onAdopt }: LogPreviewCardProps) {
           }}
         >
           <button
-            onClick={() => { setAdopted(true); onAdopt() }}
+            onClick={onAdopt}
+            disabled={safeItems.length === 0}
             style={{
               flex: 1,
               padding: '5px 0',
-              background: '#1D9E75',
+              background: safeItems.length > 0 ? '#1D9E75' : '#C7C7C7',
               color: '#FFFFFF',
               border: 'none',
               borderRadius: 6,
               fontSize: 12,
               fontWeight: 500,
-              cursor: 'pointer',
+              cursor: safeItems.length > 0 ? 'pointer' : 'not-allowed',
             }}
           >
             采纳，填入记录
           </button>
           <button
-            onClick={() => setDismissed(true)}
+            onClick={onDiscard}
             style={{
               padding: '5px 10px',
               background: 'transparent',

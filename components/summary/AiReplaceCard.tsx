@@ -4,18 +4,25 @@ import { ReplaceSuggestion } from '@/types'
 
 interface AiReplaceCardProps {
   data: ReplaceSuggestion
+  adopted?: boolean
+  discarded?: boolean
   onAdopt: (original: string, replacement: string) => boolean | void
   onCopy: (replacement: string) => void
   onDismiss: () => void
 }
 
-export default function AiReplaceCard({ data, onAdopt, onCopy, onDismiss }: AiReplaceCardProps) {
-  const [adopted, setAdopted] = useState(false)
+export default function AiReplaceCard({
+  data,
+  adopted = false,
+  discarded = false,
+  onAdopt,
+  onCopy,
+  onDismiss,
+}: AiReplaceCardProps) {
   const [copied, setCopied] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
   const [adoptFailed, setAdoptFailed] = useState(false)
 
-  if (dismissed) return null
+  if (discarded) return null
 
   async function handleCopy() {
     try {
@@ -33,7 +40,7 @@ export default function AiReplaceCard({ data, onAdopt, onCopy, onDismiss }: AiRe
     if (success === false) {
       setAdoptFailed(true)
     } else {
-      setAdopted(true)
+      setAdoptFailed(false)
     }
   }
 
@@ -56,6 +63,46 @@ export default function AiReplaceCard({ data, onAdopt, onCopy, onDismiss }: AiRe
         <span style={{ color: '#1D9E75' }}>✦</span>
         AI 建议替换 · {data.target_section}
       </div>
+
+      {/* 操作按钮放在顶部，避免长文本把选择按钮挤出可视区 */}
+      {!adopted && (
+        <div style={{ padding: '8px 12px', borderBottom: '1px solid #F0EDE8', display: 'flex', gap: 6 }}>
+          <button
+            onClick={handleAdopt}
+            style={{
+              flex: 1, padding: '5px 0',
+              background: '#1D9E75', color: '#FFFFFF',
+              border: 'none', borderRadius: 6,
+              fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            采纳替换
+          </button>
+          <button
+            onClick={handleCopy}
+            style={{
+              padding: '5px 10px',
+              background: 'transparent',
+              color: copied ? '#1D9E75' : '#6B6B6B',
+              border: '1px solid #E8E4DD', borderRadius: 6,
+              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            {copied ? '已复制' : '复制'}
+          </button>
+          <button
+            onClick={onDismiss}
+            style={{
+              padding: '5px 10px',
+              background: 'transparent', color: '#B0ADA6',
+              border: '1px solid #E8E4DD', borderRadius: 6,
+              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            不替换
+          </button>
+        </div>
+      )}
 
       <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* 原文（删除线） */}
@@ -84,45 +131,6 @@ export default function AiReplaceCard({ data, onAdopt, onCopy, onDismiss }: AiRe
           </div>
         )}
       </div>
-
-      {!adopted && (
-        <div style={{ padding: '8px 12px', borderTop: '1px solid #F0EDE8', display: 'flex', gap: 6 }}>
-          <button
-            onClick={handleAdopt}
-            style={{
-              flex: 1, padding: '5px 0',
-              background: '#1D9E75', color: '#FFFFFF',
-              border: 'none', borderRadius: 6,
-              fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            ✓ 采纳替换
-          </button>
-          <button
-            onClick={handleCopy}
-            style={{
-              padding: '5px 10px',
-              background: 'transparent',
-              color: copied ? '#1D9E75' : '#6B6B6B',
-              border: '1px solid #E8E4DD', borderRadius: 6,
-              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            {copied ? '已复制' : '复制'}
-          </button>
-          <button
-            onClick={() => { setDismissed(true); onDismiss() }}
-            style={{
-              padding: '5px 10px',
-              background: 'transparent', color: '#B0ADA6',
-              border: '1px solid #E8E4DD', borderRadius: 6,
-              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            不替换
-          </button>
-        </div>
-      )}
 
       {adopted && (
         <div style={{ padding: '8px 12px', borderTop: '1px solid #F0EDE8', fontSize: 12, color: '#9FE1CB' }}>

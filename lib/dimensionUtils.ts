@@ -26,3 +26,33 @@ export function buildDimensionTree(dims: Dimension[]): Dimension[] {
 
   return roots
 }
+
+export interface NumberedDimension {
+  n: string
+  id: string
+  name: string
+  level: 1 | 2 | 3
+  parent_id: string | null
+}
+
+export function buildNumberedDimensions(dims: Dimension[]): NumberedDimension[] {
+  const tree = buildDimensionTree(dims)
+  const out: NumberedDimension[] = []
+
+  function walk(nodes: Dimension[], prefix = '') {
+    nodes.forEach((node, index) => {
+      const n = prefix ? `${prefix}.${index + 1}` : `${index + 1}`
+      out.push({
+        n,
+        id: node.id,
+        name: node.name,
+        level: node.level,
+        parent_id: node.parent_id,
+      })
+      if (node.children && node.children.length > 0) walk(node.children, n)
+    })
+  }
+
+  walk(tree)
+  return out
+}

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   AiConversationState,
   AiMessage,
+  DimensionOpsPreview,
   ProfilePreview,
   ProfilePreviewTarget,
   UserProfile,
@@ -14,6 +15,7 @@ import ProfilePreviewCard from '@/components/profile/ProfilePreviewCard'
 import AiReplaceCard from '@/components/summary/AiReplaceCard'
 import LogPreviewCard from '@/components/log/LogPreviewCard'
 import { LogPreviewItem } from '@/types'
+import { buildDimensionTree } from '@/lib/dimensionUtils'
 
 interface AiSidePanelProps {
   isOpen: boolean
@@ -25,7 +27,7 @@ interface AiSidePanelProps {
   dimensions?: Dimension[]
   currentFocus?: ProfilePreviewTarget | null
   onCurrentFocusChange?: (focus: ProfilePreviewTarget | null) => void
-  onPreviewAdopt?: (preview: ProfilePreview) => Promise<void>
+  onPreviewAdopt?: (preview: ProfilePreview | DimensionOpsPreview) => Promise<void>
   // log 页面专用：占位上下文（Task 12 再替换真实值）
   logDimensionsTree?: string
   logExistingLogs?: string
@@ -77,9 +79,57 @@ export default function AiSidePanel({
 
   const hasPendingPreview = messages.some(
     m => (m.messageType === 'profile_preview' && !m.confirmed && !m.discarded) ||
-         (m.messageType === 'replace_suggestion' && !m.confirmed && !m.discarded)
+         (m.messageType === 'dimension_ops_preview' && !m.confirmed && !m.discarded) ||
+         (m.messageType === 'replace_suggestion' && !m.confirmed && !m.discarded) ||
+         (m.messageType === 'log_preview' && !m.confirmed && !m.discarded)
   )
   const inputLocked = sending || ended || hasPendingPreview
+
+  function extractBalancedJsonObject(text: string, anchor?: string): string | null {
+    const source = String(text || '')
+    const start = anchor ? source.indexOf(anchor) : 0
+    if (start < 0) return null
+    const from = source.lastIndexOf('{', start)
+    const begin = from >= 0 ? from : source.indexOf('{')
+    if (begin < 0) return null
+    let depth = 0
+    let inString = false
+    let escaped = false
+    for (let i = begin; i < source.length; i++) {
+      const ch = source[i]
+      if (inString) {
+        if (escaped) escaped = false
+        else if (ch === '\\') escaped = true
+        else if (ch === '"') inString = false
+        continue
+      }
+      if (ch === '"') {
+        inString = true
+        continue
+      }
+      if (ch === '{') depth++
+      if (ch === '}') {
+        depth--
+        if (depth === 0) return source.slice(begin, i + 1)
+      }
+    }
+    return null
+  }
+
+  function parseDimensionOpsPreviewFromText(text: string): DimensionOpsPreview | null {
+    try {
+      const balanced = extractBalancedJsonObject(text, '"dimension_ops_preview"')
+        ?? extractBalancedJsonObject(text, '"operations"')
+      if (!balanced) return null
+      const parsed = JSON.parse(balanced)
+      if (parsed?.type === 'dimension_ops_preview' && parsed?.target === 'dimension' && Array.isArray(parsed?.operations)) {
+        return parsed as DimensionOpsPreview
+      }
+    } catch {
+      // continue
+    }
+    return null
+  }
 
   // 面板打开且有初始消息时显示（同时监听 initialMessage，
   // 因为 isNewUser 是异步确定的，初始消息可能在面板已打开后才就绪）
@@ -87,7 +137,7 @@ export default function AiSidePanel({
     if (isOpen && initialMessage && messages.length === 0) {
       setMessages([{ role: 'assistant', content: initialMessage }])
     }
-  }, [isOpen, initialMessage])
+  }, [isOpen, initialMessage, messages.length])
 
   useEffect(() => {
     onConversationStateChange?.({
@@ -95,7 +145,7 @@ export default function AiSidePanel({
       isEnded: ended,
       hasPendingPreview,
     })
-  }, [messages, ended])
+  }, [messages, ended, hasPendingPreview, onConversationStateChange])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -144,25 +194,54 @@ export default function AiSidePanel({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-      .then(r => r.json())
+      .then(async r => {
+        const data = await r.json()
+        if (!r.ok || data?.error) {
+          throw new Error(data?.error || 'AI 服务暂时不可用，请稍后重试。')
+        }
+        return data
+      })
       .then(data => {
         if (data.logPreview) {
           setMessages(prev => [...prev, {
             role: 'assistant',
-            content: data.content,
+            content: data.content || '我已经整理好了，请查看下方预览。',
             messageType: 'log_preview' as const,
             logPreviewData: data.logPreview,
           }])
-        } else if (data.profilePreview) {
+        } else if (data.dimensionOpsPreview) {
           setMessages(prev => [...prev, {
             role: 'assistant',
-            content: data.content,
+            content: data.content || '我已经整理好了，请查看下方变更清单。',
+            messageType: 'dimension_ops_preview' as const,
+            dimensionOpsPreviewData: data.dimensionOpsPreview,
+          }])
+          onCurrentFocusChange?.('dimension')
+        } else if (data.profilePreview) {
+          const previewMessage = buildProfilePreviewMessage(
+            data.profilePreview as ProfilePreview,
+            data.content || '我已经整理好了，请查看下方预览。'
+          )
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: previewMessage,
             messageType: 'profile_preview' as const,
             profilePreview: data.profilePreview,
           }])
           onCurrentFocusChange?.(data.profilePreview.target)
         } else {
-          setMessages(prev => [...prev, { role: 'assistant', content: data.content }])
+          const opsPreview = parseDimensionOpsPreviewFromText(String(data.content || ''))
+          if (opsPreview) {
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: '我已经整理好了变更清单，请查看下方采纳卡。',
+              messageType: 'dimension_ops_preview' as const,
+              dimensionOpsPreviewData: opsPreview,
+            }])
+            onCurrentFocusChange?.('dimension')
+            return
+          }
+          setMessages(prev => [...prev, { role: 'assistant', content: data.content || '我先理解到这里，你可以继续补充。' }])
         }
       })
       .catch(() => {
@@ -201,16 +280,39 @@ export default function AiSidePanel({
 
   function buildDimensionsString(dims: Dimension[]): string {
     if (!dims || dims.length === 0) return '暂无数据'
-    const leaves = dims.filter(d => d.level === 3)
-    if (leaves.length === 0) {
-      return dims.map(d => `${'  '.repeat(d.level - 1)}${d.name}`).join('\n')
+
+    const lines: string[] = []
+    const tree = buildDimensionTree(dims)
+
+    function walk(nodes: Dimension[], prefix = '') {
+      nodes.forEach((node, index) => {
+        const n = prefix ? `${prefix}.${index + 1}` : `${index + 1}`
+        const indent = '  '.repeat(Math.max(0, node.level - 1))
+        const prompt = node.level === 3 && node.prompt_text ? `（提示词：${node.prompt_text}）` : ''
+        lines.push(`${indent}[N:${n}][ID:${node.id}] ${node.name}${prompt}`)
+        if (node.children && node.children.length > 0) {
+          walk(node.children, n)
+        }
+      })
     }
-    return leaves.map(leaf => {
-      const parent = dims.find(d => d.id === leaf.parent_id)
-      const grandParent = parent ? dims.find(d => d.id === parent.parent_id) : null
-      const path = [grandParent?.name, parent?.name, leaf.name].filter(Boolean).join(' > ')
-      return `${path}${leaf.prompt_text ? `（提示词：${leaf.prompt_text}）` : ''}`
-    }).join('\n')
+
+    walk(tree)
+    return lines.join('\n')
+  }
+
+  function buildDimensionDeleteHint(previewDims: ProfilePreviewDimension[]): string | null {
+    const currentLevel1 = dimensions.filter(d => d.level === 1).map(d => d.name)
+    const previewLevel1 = previewDims.map(d => d.name)
+    const removed = currentLevel1.filter(name => !previewLevel1.includes(name))
+    if (removed.length === 0) return null
+    return `将删除：${removed.join('、')}`
+  }
+
+  function buildProfilePreviewMessage(preview: ProfilePreview | undefined, fallback: string): string {
+    if (!preview) return fallback
+    if (preview.target !== 'dimension') return fallback
+    const hint = buildDimensionDeleteHint(preview.content as ProfilePreviewDimension[])
+    return hint ? `${fallback}\n${hint}` : fallback
   }
 
   async function handleSend() {
@@ -259,36 +361,68 @@ export default function AiSidePanel({
         body: JSON.stringify(body),
       })
       const data = await res.json()
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error || 'AI 服务暂时不可用，请稍后重试。')
+      }
 
       if (data.replaceSuggestion) {
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: data.content,
+          content: data.content || '我已经整理好了，请查看下方建议。',
           messageType: 'replace_suggestion' as const,
           replaceSuggestionData: data.replaceSuggestion,
         }])
       } else if (data.logPreview) {
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: data.content,
+          content: data.content || '我已经整理好了，请查看下方预览。',
           messageType: 'log_preview' as const,
           logPreviewData: data.logPreview,
         }])
-      } else if (data.profilePreview) {
+      } else if (data.dimensionOpsPreview) {
         setMessages(prev => [
           ...prev,
           {
             role: 'assistant',
-            content: data.content,
+            content: data.content || '我已经整理好了，请查看下方变更清单。',
+            messageType: 'dimension_ops_preview' as const,
+            dimensionOpsPreviewData: data.dimensionOpsPreview,
+          },
+        ])
+        onCurrentFocusChange?.('dimension')
+      } else if (data.profilePreview) {
+        const previewMessage = buildProfilePreviewMessage(
+          data.profilePreview as ProfilePreview,
+          data.content || '我已经整理好了，请查看下方预览。'
+        )
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: previewMessage,
             messageType: 'profile_preview' as const,
             profilePreview: data.profilePreview,
           },
         ])
         onCurrentFocusChange?.(data.profilePreview.target)
       } else {
+        const opsPreview = parseDimensionOpsPreviewFromText(String(data.content || ''))
+        if (opsPreview) {
+          setMessages(prev => [
+            ...prev,
+            {
+              role: 'assistant',
+              content: '我已经整理好了变更清单，请查看下方采纳卡。',
+              messageType: 'dimension_ops_preview' as const,
+              dimensionOpsPreviewData: opsPreview,
+            },
+          ])
+          onCurrentFocusChange?.('dimension')
+          return
+        }
         setMessages(prev => [
           ...prev,
-          { role: 'assistant', content: data.content },
+          { role: 'assistant', content: data.content || '我先理解到这里，你可以继续补充。' },
         ])
       }
     } catch {
@@ -301,7 +435,7 @@ export default function AiSidePanel({
     }
   }
 
-  async function handleAdopt(preview: ProfilePreview, msgIndex: number) {
+  async function handleAdopt(preview: ProfilePreview | DimensionOpsPreview, msgIndex: number) {
     try {
       await onPreviewAdopt?.(preview)
       const targetLabel =
@@ -341,10 +475,22 @@ export default function AiSidePanel({
       })
         .then(r => r.json())
         .then(data => {
-          if (data.profilePreview) {
+          if (data.dimensionOpsPreview) {
             setMessages(prev => [...prev, {
               role: 'assistant',
-              content: data.content,
+              content: data.content || '我已经整理好了，请查看下方变更清单。',
+              messageType: 'dimension_ops_preview' as const,
+              dimensionOpsPreviewData: data.dimensionOpsPreview,
+            }])
+            onCurrentFocusChange?.('dimension')
+          } else if (data.profilePreview) {
+            const previewMessage = buildProfilePreviewMessage(
+              data.profilePreview as ProfilePreview,
+              data.content || '我已经整理好了，请查看下方预览。'
+            )
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: previewMessage,
               messageType: 'profile_preview' as const,
               profilePreview: data.profilePreview,
             }])
@@ -426,10 +572,13 @@ export default function AiSidePanel({
           {messages.length > 0 && (
             <button
               onClick={() => {
-                const hasPendingReplace = messages.some(
-                  m => m.messageType === 'replace_suggestion' && !m.confirmed && !m.discarded
+                const hasPendingDecision = messages.some(
+                  m =>
+                    (m.messageType === 'replace_suggestion' || m.messageType === 'log_preview') &&
+                    !m.confirmed &&
+                    !m.discarded
                 )
-                if (hasPendingReplace && !window.confirm('有未采纳的替换建议，结束后将丢失。确认结束？')) return
+                if (hasPendingDecision && !window.confirm('有未处理的 AI 建议，结束后将丢失。确认结束？')) return
                 setEnded(true)
               }}
               disabled={ended}
@@ -494,18 +643,38 @@ export default function AiSidePanel({
               />
             )
           }
+          if (msg.messageType === 'dimension_ops_preview' && msg.dimensionOpsPreviewData) {
+            return (
+              <ProfilePreviewCard
+                key={i}
+                preview={msg.dimensionOpsPreviewData}
+                adopted={msg.confirmed}
+                discarded={msg.discarded}
+                onAdopt={(p) => handleAdopt(p, i)}
+                onDiscard={() => handleDiscard(i)}
+              />
+            )
+          }
           if (msg.messageType === 'replace_suggestion' && msg.replaceSuggestionData) {
             return (
               <AiReplaceCard
                 key={i}
                 data={msg.replaceSuggestionData}
+                adopted={msg.confirmed}
+                discarded={msg.discarded}
                 onAdopt={(original, replacement) => {
-                  return onReplaceSuggestionAdopt?.(original, replacement) ?? true
+                  const success = onReplaceSuggestionAdopt?.(original, replacement) ?? true
+                  if (success !== false) {
+                    setMessages(prev => prev.map((m, idx) =>
+                      idx === i ? { ...m, confirmed: true, discarded: false } : m
+                    ))
+                  }
+                  return success
                 }}
                 onCopy={() => {}}
                 onDismiss={() => {
                   setMessages(prev => prev.map((m, idx) =>
-                    idx === i ? { ...m, confirmed: true, discarded: true } : m
+                    idx === i ? { ...m, confirmed: false, discarded: true } : m
                   ))
                 }}
               />
@@ -513,11 +682,42 @@ export default function AiSidePanel({
           }
           if (msg.messageType === 'log_preview' && msg.logPreviewData) {
             return (
-              <LogPreviewCard
-                key={i}
-                data={msg.logPreviewData}
-                onAdopt={() => onLogPreviewAdopt?.(msg.logPreviewData!.items)}
-              />
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'stretch' }}>
+                {!!msg.content && (
+                  <div
+                    style={{
+                      background: '#F8F7F4',
+                      borderRadius: '0 8px 8px 8px',
+                      border: '1px solid #E8E4DD',
+                      padding: '8px 12px',
+                      fontSize: 13,
+                      color: '#1A1A1A',
+                      lineHeight: 1.7,
+                      maxWidth: '85%',
+                      alignSelf: 'flex-start',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {msg.content}
+                  </div>
+                )}
+                <LogPreviewCard
+                  data={msg.logPreviewData}
+                  adopted={msg.confirmed}
+                  discarded={msg.discarded}
+                  onAdopt={() => {
+                    onLogPreviewAdopt?.(msg.logPreviewData?.items ?? [])
+                    setMessages(prev => prev.map((m, idx) =>
+                      idx === i ? { ...m, confirmed: true, discarded: false } : m
+                    ))
+                  }}
+                  onDiscard={() => {
+                    setMessages(prev => prev.map((m, idx) =>
+                      idx === i ? { ...m, confirmed: false, discarded: true } : m
+                    ))
+                  }}
+                />
+              </div>
             )
           }
           return msg.role === 'assistant' ? (

@@ -8,6 +8,7 @@ interface LogFieldProps {
   fieldState: LogFieldState
   locked: boolean
   isActive: boolean
+  onFocus?: () => void
   onChange: (content: string, isAiFilled?: boolean) => void
 }
 
@@ -101,6 +102,7 @@ export default function LogField({
   fieldState,
   locked,
   isActive,
+  onFocus,
   onChange,
 }: LogFieldProps) {
   const [focused, setFocused] = useState(false)
@@ -135,7 +137,7 @@ export default function LogField({
           if (locked) return
           onChange(e.target.value, false)
         }}
-        onFocus={() => setFocused(true)}
+        onFocus={() => { setFocused(true); onFocus?.() }}
         onBlur={() => setFocused(false)}
         readOnly={locked}
         rows={autoRows(fieldState.content)}

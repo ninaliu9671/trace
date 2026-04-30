@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import {
+  DimensionOpsPreview,
   ProfilePreview,
   ProfilePreviewProfileContent,
   ProfilePreviewReportNode,
@@ -9,8 +10,8 @@ import {
 } from '@/types'
 
 interface ProfilePreviewCardProps {
-  preview: ProfilePreview
-  onAdopt: (preview: ProfilePreview) => Promise<void>
+  preview: ProfilePreview | DimensionOpsPreview
+  onAdopt: (preview: ProfilePreview | DimensionOpsPreview) => Promise<void>
   onDiscard: () => void
   adopted?: boolean
   discarded?: boolean
@@ -66,6 +67,39 @@ function DimensionContent({ content }: { content: ProfilePreviewDimension[] }) {
             </span>
           )}
         </div>
+      ))}
+    </div>
+  )
+}
+
+function DimensionOpsContent({ preview }: { preview: DimensionOpsPreview }) {
+  const resolved = preview.resolved_targets ?? []
+  const fallbackLines =
+    resolved.length > 0
+      ? []
+      : preview.operations.map((op, i) => {
+          if (op.op === 'add') {
+            return `${i + 1}. 新增「${op.name ?? '未命名维度'}」`
+          }
+          if (op.op === 'delete') {
+            return `${i + 1}. 删除 ${op.target_n ?? op.target_id ?? ''}（及子项）`
+          }
+          if (op.op === 'move') {
+            return `${i + 1}. 移动 ${op.target_n ?? op.target_id ?? ''} 到 ${op.to_parent_n ?? op.to_parent_id ?? '顶层'}`
+          }
+          return `${i + 1}. 修改 ${op.target_n ?? op.target_id ?? ''}`
+        })
+
+  return (
+    <div style={{ fontSize: 12, color: '#1A1A1A', lineHeight: 1.8 }}>
+      {resolved.map((item, i) => (
+        <div key={i}>· {item}</div>
+      ))}
+      {fallbackLines.map((line, i) => (
+        <div key={`op-${i}`} style={{ color: '#6B6B6B' }}>{line}</div>
+      ))}
+      {(preview.warnings ?? []).map((w, i) => (
+        <div key={`w-${i}`} style={{ color: '#B7791F' }}>⚠ {String(w).replace(/父/g, '母')}</div>
       ))}
     </div>
   )
@@ -137,14 +171,17 @@ export default function ProfilePreviewCard({
         borderRadius: 6,
         padding: '10px 12px',
       }}>
-        {preview.target === 'profile' && (
+        {preview.type === 'profile_preview' && preview.target === 'profile' && (
           <ProfileContent content={preview.content as ProfilePreviewProfileContent} />
         )}
-        {preview.target === 'report' && (
+        {preview.type === 'profile_preview' && preview.target === 'report' && (
           <ReportContent content={preview.content as ProfilePreviewReportNode[]} />
         )}
-        {preview.target === 'dimension' && (
+        {preview.type === 'profile_preview' && preview.target === 'dimension' && (
           <DimensionContent content={preview.content as ProfilePreviewDimension[]} />
+        )}
+        {preview.type === 'dimension_ops_preview' && (
+          <DimensionOpsContent preview={preview} />
         )}
       </div>
 

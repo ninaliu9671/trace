@@ -149,6 +149,15 @@ const inputStyle: React.CSSProperties = {
 }
 
 function DimensionNodeEditor({ node, allDimensions, onSaved, onClose }: DimensionNodeEditorProps) {
+  // 编辑 level-3 节点时，从现有 parent 反推出一级祖先 id
+  const initialGrandparentId = (() => {
+    if (node?.level === 3 && node.parent_id) {
+      const parent = allDimensions.find(d => d.id === node.parent_id)
+      return parent?.parent_id ?? ''
+    }
+    return ''
+  })()
+
   const [form, setForm] = useState({
     name: node?.name ?? '',
     icon: node?.icon ?? '📋',
@@ -156,6 +165,8 @@ function DimensionNodeEditor({ node, allDimensions, onSaved, onClose }: Dimensio
     parent_id: node?.parent_id ?? '',
     prompt_text: node?.prompt_text ?? '',
   })
+  // level-3 专用：先选一级节点，再过滤二级
+  const [grandparentId, setGrandparentId] = useState(initialGrandparentId)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -169,19 +180,24 @@ function DimensionNodeEditor({ node, allDimensions, onSaved, onClose }: Dimensio
 
   function handleLevelChange(newLevel: number) {
     setForm(prev => ({ ...prev, level: newLevel as 1 | 2 | 3, parent_id: '' }))
+    setGrandparentId('')
   }
 
-  const parentOptions = allDimensions
-    .filter(d => {
-      if (form.level === 2) return d.level === 1
-      if (form.level === 3) return d.level === 2
-      return false
-    })
-    .filter(d => d.id !== node?.id)
+  function handleGrandparentChange(id: string) {
+    setGrandparentId(id)
+    setForm(prev => ({ ...prev, parent_id: '' }))
+  }
+
+  // level-2 的母节点候选：所有一级节点
+  const level1Options = allDimensions.filter(d => d.level === 1 && d.id !== node?.id)
+  // level-3 的二级候选：属于所选一级节点的二级节点
+  const level2Options = allDimensions.filter(d => d.level === 2 && d.parent_id === grandparentId && d.id !== node?.id)
+
+  const parentOptions = form.level === 2 ? level1Options : level2Options
 
   async function handleSave() {
     if (!form.name.trim()) { setError('维度名称不能为空'); return }
-    if (form.level > 1 && !form.parent_id) { setError('请选择父节点'); return }
+    if (form.level > 1 && !form.parent_id) { setError('请选择母节点'); return }
 
     setSaving(true)
     setError('')
@@ -284,23 +300,58 @@ function DimensionNodeEditor({ node, allDimensions, onSaved, onClose }: Dimensio
           )}
         </div>
 
-        {/* 父节点（level > 1 时显示） */}
-        {form.level > 1 && (
+        {/* 母节点（level 2：单级选一级；level 3：两步级联） */}
+        {form.level === 2 && (
           <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>父节点 *</label>
+            <label style={labelStyle}>母节点 *</label>
             <select
               value={form.parent_id}
               onChange={e => setForm(prev => ({ ...prev, parent_id: e.target.value }))}
               style={inputStyle}
             >
-              <option value="">— 选择父节点 —</option>
-              {parentOptions.map(p => (
+              <option value="">— 选择母节点 —</option>
+              {level1Options.map(p => (
                 <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
               ))}
             </select>
-            {parentOptions.length === 0 && (
+            {level1Options.length === 0 && (
               <div style={{ fontSize: 11, color: '#F59E0B', marginTop: 4 }}>
-                请先添加 {form.level - 1} 级维度作为父节点
+                请先添加 1 级维度作为母节点
+              </div>
+            )}
+          </div>
+        )}
+
+        {form.level === 3 && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>母节点 *</label>
+            {/* 第一步：选一级节点 */}
+            <select
+              value={grandparentId}
+              onChange={e => handleGrandparentChange(e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">— 选择一级节点 —</option>
+              {level1Options.map(p => (
+                <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
+              ))}
+            </select>
+            {/* 第二步：选该一级下的二级节点 */}
+            {grandparentId && (
+              <select
+                value={form.parent_id}
+                onChange={e => setForm(prev => ({ ...prev, parent_id: e.target.value }))}
+                style={{ ...inputStyle, marginTop: 6 }}
+              >
+                <option value="">— 选择二级节点 —</option>
+                {level2Options.map(p => (
+                  <option key={p.id} value={p.id}>{p.icon} {p.name}</option>
+                ))}
+              </select>
+            )}
+            {grandparentId && level2Options.length === 0 && (
+              <div style={{ fontSize: 11, color: '#F59E0B', marginTop: 4 }}>
+                该一级节点下暂无二级维度，请先添加
               </div>
             )}
           </div>

@@ -6,8 +6,8 @@ import { buildDimensionTree } from '@/lib/dimensionUtils'
 interface DimensionDirectoryProps {
   dimensions: Dimension[]
   fieldStates: Record<string, LogFieldState>
-  activeLeafId: string | null
-  onLeafClick: (id: string) => void
+  activeLevel2Id: string | null
+  onLevel2Click: (id: string) => void
 }
 
 function getLeafIds(node: Dimension): string[] {
@@ -86,14 +86,14 @@ function FillDot({ status }: { status: 'full' | 'partial' | 'empty' }) {
 export default function DimensionDirectory({
   dimensions,
   fieldStates,
-  activeLeafId,
-  onLeafClick,
+  activeLevel2Id,
+  onLevel2Click,
 }: DimensionDirectoryProps) {
   const tree = buildDimensionTree(dimensions)
 
-  function handleClick(leafId: string) {
-    onLeafClick(leafId)
-    document.getElementById(`log-field-${leafId}`)?.scrollIntoView({
+  function handleLevel2Click(level2Id: string, firstLeafId: string) {
+    onLevel2Click(level2Id)
+    document.getElementById(`log-field-${firstLeafId}`)?.scrollIntoView({
       behavior: 'smooth',
       block: 'start',
     })
@@ -127,12 +127,12 @@ export default function DimensionDirectory({
             {(level1.children ?? []).map(level2 => {
               const l2Status = getFillStatus(level2, fieldStates)
               const firstLeafId = getLeafIds(level2)[0] ?? level2.id
-              const isActive = level2.children?.some(l3 => l3.id === activeLeafId) ?? false
+              const isActive = level2.id === activeLevel2Id
 
               return (
                 <div
                   key={level2.id}
-                  onClick={() => handleClick(firstLeafId)}
+                  onClick={() => handleLevel2Click(level2.id, firstLeafId)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
