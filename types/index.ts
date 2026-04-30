@@ -78,6 +78,7 @@ export interface DataSources {
   logs_count?: number
   completeness?: 'complete' | 'partial' | 'logs_only'
   dimension_names?: string[]
+  report_node_name?: string
 }
 
 export interface Summary {
@@ -161,6 +162,32 @@ export interface ProfilePreview {
   content: ProfilePreviewProfileContent | ProfilePreviewReportNode[] | ProfilePreviewDimension[]
 }
 
+export type DimensionOpType = 'add' | 'delete' | 'update' | 'move'
+
+export interface DimensionOperation {
+  op: DimensionOpType
+  target_n?: string
+  target_id?: string
+  parent_n?: string | null
+  parent_id?: string | null
+  to_parent_n?: string | null
+  to_parent_id?: string | null
+  to_index?: number
+  level?: 1 | 2 | 3
+  name?: string
+  icon?: string
+  prompt_text?: string | null
+  fields?: Partial<Pick<Dimension, 'name' | 'icon' | 'prompt_text'>>
+}
+
+export interface DimensionOpsPreview {
+  type: 'dimension_ops_preview'
+  target: 'dimension'
+  operations: DimensionOperation[]
+  resolved_targets?: string[]
+  warnings?: string[]
+}
+
 export interface ReplaceSuggestion {
   type: 'replace_suggestion'
   target_section: string
@@ -171,9 +198,10 @@ export interface ReplaceSuggestion {
 export interface AiMessage {
   role: 'user' | 'assistant'
   content: string
-  messageType?: 'text' | 'onboarding_result' | 'profile_preview' | 'log_preview' | 'replace_suggestion'
+  messageType?: 'text' | 'onboarding_result' | 'profile_preview' | 'dimension_ops_preview' | 'log_preview' | 'replace_suggestion'
   onboardingData?: OnboardingResult
   profilePreview?: ProfilePreview
+  dimensionOpsPreviewData?: DimensionOpsPreview
   logPreviewData?: LogPreview
   replaceSuggestionData?: ReplaceSuggestion
   confirmed?: boolean
